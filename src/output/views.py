@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.cleaning import prune_public_record
-from src.transform import IMPORTANCE_MAP, REGION_TAGS
+from src.ingest.transform import IMPORTANCE_MAP, REGION_TAGS
+from src.output.cleaning import prune_public_record
 
 _IMPORTANCE_TAGS = set(IMPORTANCE_MAP)
 

@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "BatchStats",
+  "description": "单个 batch 的处理统计，reports/batch_stats.jsonl 每行一个对象。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["batch", "status", "input", "accepted", "rejected"],
+  "properties": {
+    "batch": { "type": "string", "minLength": 1, "description": "batch 文件名，如 content_batch_0.ndjson。" },
+    "status": { "type": "string", "enum": ["running", "complete"], "description": "处理状态。" },
+    "input": { "type": "integer", "minimum": 0, "description": "该 batch 原始行数。" },
+    "accepted": { "type": "integer", "minimum": 0, "description": "通过校验并入库的行数。" },
+    "rejected": { "type": "integer", "minimum": 0, "description": "被拒绝的行数。" }
+  }
+}

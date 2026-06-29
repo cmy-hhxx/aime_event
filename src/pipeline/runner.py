@@ -5,46 +5,17 @@ import shutil
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from typing import Any, BinaryIO, Iterable
+from typing import Iterable
 
 import orjson
 
-from src.config import PipelineConfig
-from src.dedup import finalize_record
+from src.config import PipelineConfig, validate_config
+from src.dedup.exact import finalize_record
+from src.ingest.transform import TransformResult, transform_line
+from src.output.views import build_cleaned_record, build_event_record
+from src.pipeline.writers import PartWriter
 from src.reporting import write_reports
 from src.storage import PayloadWriter, RejectRow, StagingDB, StateVersionError
-from src.transform import TransformResult, transform_line
-from src.views import build_cleaned_record, build_event_record
-
-
-class PartWriter:
-    def __init__(self, directory: Path, prefix: str, part_size: int):
-        self.directory = directory
-        self.prefix = prefix
-        self.part_size = part_size
-        self.count = 0
-        self.part_index = 0
-        self.handle: BinaryIO | None = None
-        directory.mkdir(parents=True, exist_ok=True)
-
-    def write(self, payload: dict[str, Any]) -> None:
-        if self.handle is None or self.count % self.part_size == 0:
-            self._open_next()
-        assert self.handle is not None
-        self.handle.write(orjson.dumps(payload) + b"\n")
-        self.count += 1
-
-    def close(self) -> None:
-        if self.handle is not None:
-            self.handle.close()
-            self.handle = None
-
-    def _open_next(self) -> None:
-        if self.handle is not None:
-            self.handle.close()
-        path = self.directory / f"{self.prefix}_part_{self.part_index:05d}.ndjson"
-        self.handle = path.open("wb")
-        self.part_index += 1
 
 
 def discover_batches(input_dir: Path) -> list[Path]:
@@ -53,7 +24,6 @@ def discover_batches(input_dir: Path) -> list[Path]:
 
 def ingest_batches(config: PipelineConfig, db: StagingDB, force: bool) -> None:
     paths = config.paths
-    runtime = config.runtime
     batches = discover_batches(paths.input_dir)
     if not batches:
         print(f"No batch files found in {paths.input_dir}")
@@ -187,6 +157,7 @@ def run_pipeline(
     export_only: bool = False,
     force: bool = False,
 ) -> None:
+    validate_config(config)
     paths = config.paths
     try:
         db = StagingDB(
@@ -209,7 +180,15 @@ def run_pipeline(
         db.close()
 
     print(f"Exported: {json.dumps(export_stats, sort_keys=True)}")
-    print(f"Done. Summary: {json.dumps(summary, indent=2, sort_keys=True)}")
+    near_merged = summary.get("near_duplicates_auto_merged", 0)
+    print(
+        f"报表已写入 {paths.reports_dir}/："
+        f"canonical={summary.get('total_cleaned', 0)}, "
+        f"duplicates={summary.get('total_duplicates', 0)}, "
+        f"rejected={summary.get('total_rejected', 0)}, "
+        f"near_merged={near_merged}"
+    )
+    print(f"详见 {paths.reports_dir}/README.md 或 {paths.reports_dir}/index.json")
 
 
 def _flush_chunk(

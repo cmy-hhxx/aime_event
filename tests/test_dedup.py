@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from src.dedup import compute_dedup_key, is_eligible_article_url, normalize_url
+from src.dedup.exact import compute_dedup_key, is_eligible_article_url, normalize_url
 
 
 def _record(url: str, title: str, body: str) -> dict:

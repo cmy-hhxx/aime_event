@@ -9,7 +9,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from src.config import NearDuplicateConfig
-from src.dedup import normalize_text, normalize_url
+from src.dedup.exact import normalize_text, normalize_url
 
 _TOKEN_RE = re.compile(r"[a-z0-9$%.\-]+")
 

@@ -1,0 +1,63 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NearDuplicatePair",
+  "description": "近似去重候选对审计记录，reports/near_duplicates.jsonl 每行一个对象。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "status",
+    "reason",
+    "left_id",
+    "right_id",
+    "canonical_id",
+    "bucket_hits",
+    "scores",
+    "left",
+    "right"
+  ],
+  "properties": {
+    "type": { "type": "string", "enum": ["near_minhash"], "description": "候选对类型，当前固定 near_minhash。" },
+    "status": {
+      "type": "string",
+      "enum": ["auto_merged", "report_only"],
+      "description": "auto_merged=已自动合并，report_only=仅记录未合并。"
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1,
+      "description": "决策原因，如 high_confidence_near_duplicate、below_minhash_threshold、below_fuzzy_threshold、different_host_and_title、published_at_gap。"
+    },
+    "left_id": { "type": "string", "minLength": 1, "description": "左侧记录 ID。" },
+    "right_id": { "type": "string", "minLength": 1, "description": "右侧记录 ID。" },
+    "canonical_id": {
+      "type": ["string", "null"],
+      "description": "合并后保留的记录 ID；report_only 时为 null。"
+    },
+    "bucket_hits": { "type": "integer", "minimum": 1, "description": "LSH 桶命中次数。" },
+    "scores": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minhash_jaccard", "fuzzy_score", "title_score"],
+      "properties": {
+        "minhash_jaccard": { "type": "number", "description": "MinHash Jaccard 相似度。" },
+        "fuzzy_score": { "type": "number", "description": "正文 RapidFuzz 分数。" },
+        "title_score": { "type": "number", "description": "标题 RapidFuzz 分数。" }
+      }
+    },
+    "left": { "$ref": "#/definitions/recordSummary" },
+    "right": { "$ref": "#/definitions/recordSummary" }
+  },
+  "definitions": {
+    "recordSummary": {
+      "type": "object",
+      "description": "候选记录摘要。",
+      "properties": {
+        "id": { "type": "string" },
+        "content_type": { "type": "string" },
+        "title": { "type": "string" },
+        "published_at": { "type": "string" }
+      }
+    }
+  }
+}

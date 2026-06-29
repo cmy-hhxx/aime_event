@@ -255,7 +255,7 @@ def test_resume_export_only_and_force_are_stable(tmp_path: Path) -> None:
 
 
 def test_payload_offsets_can_reload_records(tmp_path: Path) -> None:
-    from src.dedup_db import StagingDB
+    from src.storage import StagingDB
 
     _write_input(tmp_path / "input")
     _run_pipeline(tmp_path)

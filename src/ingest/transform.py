@@ -6,7 +6,7 @@ from typing import Any
 
 import orjson
 
-from src.html_utils import html_to_text
+from src.ingest.html_utils import html_to_text
 
 REGION_TAGS = {
     "NorthAmerica",

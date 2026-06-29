@@ -1,0 +1,79 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PipelineSummary",
+  "description": "流水线全库汇总统计，写入 reports/summary.json。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "total_input",
+    "total_accepted",
+    "total_cleaned",
+    "total_duplicates",
+    "total_rejected",
+    "batches_completed",
+    "by_content_type",
+    "dedup_by_method",
+    "duplicate_by_method",
+    "rejects_by_reason",
+    "near_duplicate_candidates",
+    "near_duplicates_auto_merged",
+    "near_duplicates_report_only",
+    "storage"
+  ],
+  "properties": {
+    "total_input": { "type": "integer", "minimum": 0, "description": "所有 batch 原始行数之和。" },
+    "total_accepted": { "type": "integer", "minimum": 0, "description": "通过校验并入库的记录数。" },
+    "total_cleaned": { "type": "integer", "minimum": 0, "description": "最终 canonical 记录数（不含被近似去重吞掉的 loser）。" },
+    "total_duplicates": { "type": "integer", "minimum": 0, "description": "重复记录总数（精确 + 近似）。" },
+    "total_rejected": { "type": "integer", "minimum": 0, "description": "被拒绝的原始行数。" },
+    "batches_completed": { "type": "integer", "minimum": 0, "description": "已完成的 batch 数量。" },
+    "by_content_type": {
+      "type": "object",
+      "description": "canonical 记录按 content_type 分布。",
+      "additionalProperties": { "type": "integer", "minimum": 0 }
+    },
+    "dedup_by_method": {
+      "type": "object",
+      "description": "canonical 记录的去重方法分布。",
+      "additionalProperties": { "type": "integer", "minimum": 0 }
+    },
+    "duplicate_by_method": {
+      "type": "object",
+      "description": "重复记录的去重方法分布。",
+      "additionalProperties": { "type": "integer", "minimum": 0 }
+    },
+    "rejects_by_reason": {
+      "type": "object",
+      "description": "拒绝原因分布。",
+      "additionalProperties": { "type": "integer", "minimum": 0 }
+    },
+    "near_duplicate_candidates": { "type": "integer", "minimum": 0, "description": "近似去重候选对总数。" },
+    "near_duplicates_auto_merged": { "type": "integer", "minimum": 0, "description": "自动合并的近似重复对数。" },
+    "near_duplicates_report_only": { "type": "integer", "minimum": 0, "description": "仅记录未合并的候选对数。" },
+    "storage": {
+      "type": "object",
+      "description": "各目录字节数与规模估算。",
+      "additionalProperties": false,
+      "required": [
+        "db_bytes",
+        "payload_bytes",
+        "cleaned_bytes",
+        "duplicates_bytes",
+        "rejects_bytes",
+        "event_input_bytes",
+        "total_pipeline_bytes",
+        "estimated_20m_rows_bytes"
+      ],
+      "properties": {
+        "db_bytes": { "type": "integer", "minimum": 0, "description": "state/dedup.db 字节数。" },
+        "payload_bytes": { "type": "integer", "minimum": 0, "description": "state/payloads/ 字节数。" },
+        "cleaned_bytes": { "type": "integer", "minimum": 0, "description": "output/cleaned/ 字节数。" },
+        "duplicates_bytes": { "type": "integer", "minimum": 0, "description": "output/duplicates/ 字节数。" },
+        "rejects_bytes": { "type": "integer", "minimum": 0, "description": "output/rejects/ 字节数。" },
+        "event_input_bytes": { "type": "integer", "minimum": 0, "description": "output/event_input/ 字节数。" },
+        "total_pipeline_bytes": { "type": "integer", "minimum": 0, "description": "上述目录总字节数。" },
+        "estimated_20m_rows_bytes": { "type": "integer", "minimum": 0, "description": "按当前行均大小估算 2000 万行总存储。" }
+      }
+    }
+  }
+}

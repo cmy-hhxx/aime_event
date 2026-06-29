@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from src.config import NearDuplicateConfig
-from src.near_dedup import NearDuplicateDetector
+from src.dedup.near import NearDuplicateDetector
 
 
 def _record(record_id: str, title: str, body: str, content_type: str = "US_NEWS") -> dict:

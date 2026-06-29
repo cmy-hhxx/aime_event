@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import orjson
 
-from src.transform import transform, transform_line
+from src.ingest.transform import transform, transform_line
 
 
 def _raw(**overrides: object) -> dict:

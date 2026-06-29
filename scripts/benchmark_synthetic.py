@@ -11,6 +11,9 @@ from pathlib import Path
 import orjson
 
 
+from src.storage import directory_size
+
+
 def _record(index: int, duplicate_every: int, near_every: int) -> dict:
     group = index // duplicate_every if duplicate_every else index
     near_group = index // near_every if near_every else index
@@ -55,12 +58,6 @@ def generate_input(path: Path, rows: int, duplicate_every: int, near_every: int)
     with output.open("wb") as handle:
         for index in range(rows):
             handle.write(orjson.dumps(_record(index, duplicate_every, near_every)) + b"\n")
-
-
-def directory_size(path: Path) -> int:
-    if not path.exists():
-        return 0
-    return sum(item.stat().st_size for item in path.rglob("*") if item.is_file())
 
 
 def main() -> None:

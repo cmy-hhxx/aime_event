@@ -1,0 +1,17 @@
+{
+  "files": {
+    "batch_stats.jsonl": {
+      "description": "按 batch 的处理统计",
+      "schema": "schema/batch_stats.schema.json"
+    },
+    "near_duplicates.jsonl": {
+      "description": "近似去重候选对审计日志",
+      "schema": "schema/near_duplicates.schema.json"
+    },
+    "summary.json": {
+      "description": "全库汇总统计",
+      "schema": "schema/summary.schema.json"
+    }
+  },
+  "generated_at": "2026-06-29T17:01:16Z"
+}

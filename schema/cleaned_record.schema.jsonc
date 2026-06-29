@@ -1,26 +1,36 @@
 {
-  // Human-readable companion for schema/cleaned_record.schema.json.
+  // cleaned_record.schema.json 的中文说明文档（非独立 schema）。
   //
-  // cleaned_record is the audit format:
-  // - keeps source.url exactly as received;
-  // - keeps meta/dedup fields for traceability when values exist;
-  // - keeps type_code/updated_at for compatibility when values exist;
-  // - omits optional fields when source data is empty;
-  // - never emits null in public output;
-  // - validates dedup.version = 4.
+  // === CleanedRecord（审计格式）===
+  // - 输出到 output/cleaned/ 与 output/duplicates/
+  // - 保留 source.url 原始值（不做去重规范化）
+  // - 保留 meta、dedup、type_code、updated_at 等审计字段
+  // - 可选字段在源数据为空时省略，公开输出不使用 null
+  // - dedup.version 必须为 4
   //
-  // event_record is the extraction format:
-  // - emitted to output/event_input/event_part_*.ndjson;
-  // - omits dedup, meta, type_code, summary, and updated_at;
-  // - removes empty source/entities/topics/notice fields;
-  // - never emits null;
-  // - turns raw tags into topics by removing region and importance tags.
+  // === EventRecord（抽取格式）===
+  // - 输出到 output/event_input/event_part_*.ndjson
+  // - 省略 dedup、meta、type_code、summary、updated_at
+  // - 原始 tags 转为 topics，去除地区与重要性标签
+  // - source 仅保留 name 和 url
   //
-  // Dedup v4:
-  // 1. US_NOTICE uses SEC accession or attachment URL.
-  // 2. Eligible article URLs are normalized before URL dedup.
-  // 3. Feed/list/API URLs fall back to SHA-256 of normalized title/body.
-  // 4. Repeated raw ids are folded before content-level dedup.
-  // 5. Exact canonical records may be merged by high-confidence MinHash + RapidFuzz near dedup.
+  // === 两种格式对照 ===
+  // | 字段          | CleanedRecord | EventRecord |
+  // |---------------|---------------|-------------|
+  // | dedup         | 有            | 无          |
+  // | meta          | 有            | 无          |
+  // | tags          | tags          | topics      |
+  // | source.author | 有            | 无          |
+  //
+  // === 去重 v4 规则 ===
+  // 1. 折叠重复原始 id
+  // 2. US_NOTICE 使用 SEC accession 或附件 URL
+  // 3. 合格文章 URL 规范化后做 URL 去重
+  // 4. Feed/列表/API URL 回退到标题+正文 SHA-256
+  // 5. 精确 canonical 记录可经 MinHash + RapidFuzz 近似去重合并
+  //
+  // === 空值策略 ===
+  // - 不输出 null
+  // - 空字符串、空数组、空对象均省略
   "$ref": "./cleaned_record.schema.json"
 }

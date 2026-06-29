@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "EventRecord",
-  "description": "Compact record intended for financial event concept extraction. Audit-only fields such as dedup, meta, type_code, summary, and updated_at are intentionally omitted.",
+  "description": "金融事件概念抽取的精简输入格式。故意省略 dedup、meta、type_code、summary、updated_at 等审计字段。",
   "type": "object",
   "additionalProperties": false,
   "required": ["id", "content_type", "title", "published_at"],
@@ -9,40 +9,42 @@
     "id": {
       "type": "string",
       "minLength": 1,
-      "description": "Stable source record id."
+      "description": "稳定记录 ID。"
     },
     "content_type": {
       "type": "string",
       "enum": ["US_NEWS", "US_ROBOT", "US_ARTICLE", "US_FLASH", "US_POST", "US_NOTICE"],
-      "description": "Business content type."
+      "description": "业务内容类型。"
     },
     "title": {
       "type": "string",
-      "description": "Clean title, useful as the event headline."
+      "description": "清洗后标题，作为事件标题使用。"
     },
     "body": {
       "type": "string",
       "minLength": 1,
-      "description": "Clean body text. Omitted for attachment-only notices."
+      "description": "清洗后正文。仅附件公告可省略。"
     },
     "published_at": {
       "type": "string",
       "format": "date-time",
-      "description": "UTC publication timestamp."
+      "description": "UTC 发布时间。"
     },
     "source": {
       "type": "object",
       "additionalProperties": false,
       "minProperties": 1,
+      "description": "来源信息，仅保留 name 和 url。",
       "properties": {
-        "name": { "type": "string" },
-        "url": { "type": "string" }
+        "name": { "type": "string", "description": "来源名称。" },
+        "url": { "type": "string", "description": "来源 URL。" }
       }
     },
     "entities": {
       "type": "object",
       "additionalProperties": false,
       "minProperties": 1,
+      "description": "股票与加密货币实体。",
       "properties": {
         "stocks": {
           "type": "array",
@@ -59,25 +61,28 @@
     "topics": {
       "type": "array",
       "minItems": 1,
-      "description": "Topic tags after removing importance and region tags.",
+      "description": "主题标签，已去除重要性与地区类标签。",
       "items": { "type": "string" }
     },
     "importance": {
       "type": "string",
-      "enum": ["high", "mid", "low"]
+      "enum": ["high", "mid", "low"],
+      "description": "重要性等级。"
     },
     "regions": {
       "type": "array",
       "minItems": 1,
+      "description": "地区标签。",
       "items": { "type": "string" }
     },
     "notice": {
       "type": "object",
       "additionalProperties": false,
       "minProperties": 1,
+      "description": "SEC 公告元数据。",
       "properties": {
-        "filing_type": { "type": "string" },
-        "declare_date": { "type": "string" },
+        "filing_type": { "type": "string", "description": "公告类型。" },
+        "declare_date": { "type": "string", "description": "申报日期。" },
         "attachments": {
           "type": "array",
           "minItems": 1,
@@ -92,8 +97,8 @@
       "additionalProperties": false,
       "required": ["symbol", "name"],
       "properties": {
-        "symbol": { "type": "string" },
-        "name": { "type": "string" }
+        "symbol": { "type": "string", "description": "股票代码。" },
+        "name": { "type": "string", "description": "股票名称。" }
       }
     },
     "cryptoEntity": {
@@ -101,8 +106,8 @@
       "additionalProperties": false,
       "required": ["code", "name"],
       "properties": {
-        "code": { "type": "string" },
-        "name": { "type": "string" }
+        "code": { "type": "string", "description": "加密货币代码。" },
+        "name": { "type": "string", "description": "加密货币名称。" }
       }
     },
     "noticeAttachment": {
@@ -110,8 +115,8 @@
       "additionalProperties": false,
       "required": ["url"],
       "properties": {
-        "url": { "type": "string" },
-        "file_type": { "type": "string" }
+        "url": { "type": "string", "description": "附件 URL。" },
+        "file_type": { "type": "string", "description": "附件类型。" }
       }
     }
   }

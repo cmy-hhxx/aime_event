@@ -3,45 +3,85 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
-from src.payload_store import DEFAULT_PAYLOAD_PART_BYTES
+DEFAULT_PAYLOAD_PART_BYTES = 512 * 1024 * 1024
+
+# ============================================================
+# 用户配置区 — 日常运行只改这里
+# ============================================================
+
+# --- 路径 ---
+INPUT_DIR = "data/raw"  # 原始 NDJSON 输入目录（content_batch_*.ndjson）
+CLEANED_DIR = "output/cleaned"  # 审计格式 canonical 输出
+DUPLICATES_DIR = "output/duplicates"  # 重复记录输出
+REJECTS_DIR = "output/rejects"  # 被拒绝的原始行
+EVENT_DIR = "output/event_input"  # 事件抽取输入（精简格式）
+STATE_DIR = "state"  # SQLite 状态库与进度文件
+PAYLOAD_DIR = "state/payloads"  # 二进制 payload 分片
+REPORTS_DIR = "reports"  # 统计报表输出
+
+# --- 运行时 ---
+WORKERS = 4  # 并行进程数，建议 ≤ CPU 核数
+CHUNK_SIZE = 3_000  # 每批送入 transform 的行数，越大内存占用越高
+PART_SIZE = 100_000  # 每个输出 NDJSON 分片的最大行数
+PAYLOAD_PART_BYTES = DEFAULT_PAYLOAD_PART_BYTES  # 每个 payload 分片最大字节数（默认 512MB）
+TARGET_SCALE_ROWS = 20_000_000  # 用于 summary 中 2000 万行存储估算
+
+# --- 近似去重 ---
+NEAR_DEDUP_ENABLED = True  # 是否启用近似去重自动合并
+NEAR_NUM_PERM = 128  # MinHash 排列数，越大越精确但越慢
+NEAR_SEED = 1  # MinHash 随机种子，固定以保证可复现
+NEAR_SHINGLE_SIZE = 5  # 正文 shingle 长度（词元数）
+NEAR_MIN_BODY_CHARS = 160  # 正文短于此长度不参与近似去重
+NEAR_THRESHOLD = 0.92  # MinHash Jaccard 阈值，越高越保守（0~1）
+NEAR_FUZZY_THRESHOLD = 96.0  # RapidFuzz 正文相似度阈值（0~100）
+NEAR_TITLE_THRESHOLD = 90.0  # 标题相似度阈值（0~100）
+NEAR_LONG_GAP_TITLE_THRESHOLD = 96.0  # 发布时间间隔较大时要求的标题相似度
+NEAR_MAX_DAYS_BETWEEN = 14  # 发布时间最大间隔天数（超出需更高标题相似度）
+NEAR_MAX_BUCKET_SIZE = 250  # LSH 桶最大记录数，防止桶爆炸
+NEAR_MAX_CANDIDATE_PAIRS = 1_000_000  # 近似去重候选对上限
+NEAR_MAX_REPORT_PAIRS = 10_000  # near_duplicates.jsonl 最多写入对数
+
+# ============================================================
+# 以下由程序组装，一般不需要修改
+# ============================================================
 
 
 @dataclass(frozen=True)
 class PathsConfig:
-    input_dir: Path = Path("data/raw")
-    cleaned_dir: Path = Path("output/cleaned")
-    duplicates_dir: Path = Path("output/duplicates")
-    rejects_dir: Path = Path("output/rejects")
-    event_dir: Path = Path("output/event_input")
-    state_dir: Path = Path("state")
-    payload_dir: Path = Path("state/payloads")
-    reports_dir: Path = Path("reports")
+    input_dir: Path = field(default_factory=lambda: Path(INPUT_DIR))
+    cleaned_dir: Path = field(default_factory=lambda: Path(CLEANED_DIR))
+    duplicates_dir: Path = field(default_factory=lambda: Path(DUPLICATES_DIR))
+    rejects_dir: Path = field(default_factory=lambda: Path(REJECTS_DIR))
+    event_dir: Path = field(default_factory=lambda: Path(EVENT_DIR))
+    state_dir: Path = field(default_factory=lambda: Path(STATE_DIR))
+    payload_dir: Path = field(default_factory=lambda: Path(PAYLOAD_DIR))
+    reports_dir: Path = field(default_factory=lambda: Path(REPORTS_DIR))
 
 
 @dataclass(frozen=True)
 class RuntimeConfig:
-    workers: int = 4
-    chunk_size: int = 3_000
-    part_size: int = 100_000
-    payload_part_bytes: int = DEFAULT_PAYLOAD_PART_BYTES
-    target_scale_rows: int = 20_000_000
+    workers: int = WORKERS
+    chunk_size: int = CHUNK_SIZE
+    part_size: int = PART_SIZE
+    payload_part_bytes: int = PAYLOAD_PART_BYTES
+    target_scale_rows: int = TARGET_SCALE_ROWS
 
 
 @dataclass(frozen=True)
 class NearDuplicateConfig:
-    enabled: bool = True
-    num_perm: int = 128
-    seed: int = 1
-    shingle_size: int = 5
-    min_body_chars: int = 160
-    threshold: float = 0.92
-    fuzzy_threshold: float = 96.0
-    title_threshold: float = 90.0
-    long_gap_title_threshold: float = 96.0
-    max_days_between: int = 14
-    max_bucket_size: int = 250
-    max_candidate_pairs: int = 1_000_000
-    max_report_pairs: int = 10_000
+    enabled: bool = NEAR_DEDUP_ENABLED
+    num_perm: int = NEAR_NUM_PERM
+    seed: int = NEAR_SEED
+    shingle_size: int = NEAR_SHINGLE_SIZE
+    min_body_chars: int = NEAR_MIN_BODY_CHARS
+    threshold: float = NEAR_THRESHOLD
+    fuzzy_threshold: float = NEAR_FUZZY_THRESHOLD
+    title_threshold: float = NEAR_TITLE_THRESHOLD
+    long_gap_title_threshold: float = NEAR_LONG_GAP_TITLE_THRESHOLD
+    max_days_between: int = NEAR_MAX_DAYS_BETWEEN
+    max_bucket_size: int = NEAR_MAX_BUCKET_SIZE
+    max_candidate_pairs: int = NEAR_MAX_CANDIDATE_PAIRS
+    max_report_pairs: int = NEAR_MAX_REPORT_PAIRS
 
     @property
     def band_size(self) -> int:
@@ -60,5 +100,23 @@ class PipelineConfig:
     def with_runtime(self, **updates: int) -> PipelineConfig:
         return replace(self, runtime=replace(self.runtime, **updates))
 
+    def with_near_duplicates(self, **updates: bool | int | float) -> PipelineConfig:
+        return replace(self, near_duplicates=replace(self.near_duplicates, **updates))
+
 
 DEFAULT_CONFIG = PipelineConfig()
+
+
+def validate_config(config: PipelineConfig) -> None:
+    runtime = config.runtime
+    near = config.near_duplicates
+    if runtime.workers < 1:
+        raise ValueError("WORKERS 必须 >= 1")
+    if runtime.chunk_size < 1:
+        raise ValueError("CHUNK_SIZE 必须 >= 1")
+    if runtime.part_size < 1:
+        raise ValueError("PART_SIZE 必须 >= 1")
+    if not 0 < near.threshold <= 1:
+        raise ValueError("NEAR_THRESHOLD 必须在 (0, 1] 范围内")
+    if not 0 < near.fuzzy_threshold <= 100:
+        raise ValueError("NEAR_FUZZY_THRESHOLD 必须在 (0, 100] 范围内")
