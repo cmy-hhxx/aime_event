@@ -2,9 +2,22 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "CleanedRecord",
   "type": "object",
-  "required": ["id", "content_type", "type_code", "title", "body", "published_at", "updated_at", "source", "entities", "tags", "dedup", "meta"],
+  "required": [
+    "id",
+    "content_type",
+    "type_code",
+    "title",
+    "body",
+    "published_at",
+    "updated_at",
+    "source",
+    "entities",
+    "tags",
+    "dedup",
+    "meta"
+  ],
   "properties": {
-    "id": { "type": "string" },
+    "id": { "type": "string", "minLength": 1 },
     "content_type": {
       "type": "string",
       "enum": ["US_NEWS", "US_ROBOT", "US_ARTICLE", "US_FLASH", "US_POST", "US_NOTICE"]
@@ -53,7 +66,10 @@
       }
     },
     "tags": { "type": "array", "items": { "type": "string" } },
-    "importance": { "type": ["string", "null"], "enum": ["high", "mid", "low", null] },
+    "importance": {
+      "type": ["string", "null"],
+      "enum": ["high", "mid", "low", null]
+    },
     "regions": { "type": "array", "items": { "type": "string" } },
     "notice": {
       "type": ["object", "null"],
@@ -64,6 +80,7 @@
           "type": "array",
           "items": {
             "type": "object",
+            "required": ["url", "file_type"],
             "properties": {
               "url": { "type": "string" },
               "file_type": { "type": "string" }
@@ -74,11 +91,15 @@
     },
     "dedup": {
       "type": "object",
-      "required": ["key", "method", "is_canonical"],
+      "required": ["key", "method", "is_canonical", "canonical_id"],
       "properties": {
         "key": { "type": "string" },
-        "method": { "type": "string", "enum": ["source_url", "content_hash", "id"] },
-        "is_canonical": { "type": "boolean" }
+        "method": {
+          "type": "string",
+          "enum": ["source_url", "content_hash", "id"]
+        },
+        "is_canonical": { "type": "boolean" },
+        "canonical_id": { "type": "string", "minLength": 1 }
       }
     },
     "meta": {

@@ -1,0 +1,18 @@
+{
+  // Human-readable notes for schema/cleaned_record.schema.json.
+  //
+  // Output format:
+  // - output/cleaned/cleaned_part_00000.ndjson contains final canonical records.
+  // - output/duplicates/dup_part_00000.ndjson contains records folded by id or dedup key.
+  // - output/rejects/reject_part_00000.ndjson contains invalid or low-quality input rows.
+  //
+  // Dedup rules:
+  // 1. Repeated raw _id records are folded first.
+  // 2. Eligible article URLs are deduped by URL.
+  // 3. Feed/list/API URLs fall back to md5(normalized_title|normalized_body).
+  // 4. Canonical choice is deterministic: body_len DESC, published_at DESC, id ASC.
+  //
+  // This JSONC file is documentation only. The executable contract is the strict
+  // JSON schema in cleaned_record.schema.json.
+  "$ref": "./cleaned_record.schema.json"
+}
