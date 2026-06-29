@@ -1,0 +1,11 @@
+{
+  "total_input": 0,
+  "total_cleaned": 0,
+  "total_duplicates": 0,
+  "total_rejected": 0,
+  "total_superseded": 0,
+  "dedup_index_size": 60340,
+  "by_content_type": {},
+  "dedup_by_method": {},
+  "batches_processed": 2
+}

@@ -1,0 +1,95 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CleanedRecord",
+  "type": "object",
+  "required": ["id", "content_type", "type_code", "title", "body", "published_at", "updated_at", "source", "entities", "tags", "dedup", "meta"],
+  "properties": {
+    "id": { "type": "string" },
+    "content_type": {
+      "type": "string",
+      "enum": ["US_NEWS", "US_ROBOT", "US_ARTICLE", "US_FLASH", "US_POST", "US_NOTICE"]
+    },
+    "type_code": { "type": "integer" },
+    "title": { "type": "string" },
+    "body": { "type": "string" },
+    "summary": { "type": ["string", "null"] },
+    "published_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "source": {
+      "type": "object",
+      "required": ["name", "url", "author"],
+      "properties": {
+        "name": { "type": ["string", "null"] },
+        "url": { "type": ["string", "null"] },
+        "author": { "type": ["string", "null"] }
+      }
+    },
+    "entities": {
+      "type": "object",
+      "required": ["stocks", "crypto"],
+      "properties": {
+        "stocks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["symbol", "name"],
+            "properties": {
+              "symbol": { "type": "string" },
+              "name": { "type": "string" }
+            }
+          }
+        },
+        "crypto": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["code", "name"],
+            "properties": {
+              "code": { "type": "string" },
+              "name": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "importance": { "type": ["string", "null"], "enum": ["high", "mid", "low", null] },
+    "regions": { "type": "array", "items": { "type": "string" } },
+    "notice": {
+      "type": ["object", "null"],
+      "properties": {
+        "filing_type": { "type": "string" },
+        "declare_date": { "type": "string" },
+        "attachments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "url": { "type": "string" },
+              "file_type": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "dedup": {
+      "type": "object",
+      "required": ["key", "method", "is_canonical"],
+      "properties": {
+        "key": { "type": "string" },
+        "method": { "type": "string", "enum": ["source_url", "content_hash", "id"] },
+        "is_canonical": { "type": "boolean" }
+      }
+    },
+    "meta": {
+      "type": "object",
+      "required": ["material_id"],
+      "properties": {
+        "language": { "type": ["string", "null"] },
+        "gid": { "type": ["string", "null"] },
+        "material_id": { "type": "string" },
+        "uid": { "type": ["string", "null"] }
+      }
+    }
+  }
+}

@@ -1,0 +1,2 @@
+orjson>=3.9
+html2text>=2024.2

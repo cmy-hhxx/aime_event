@@ -1,0 +1,2 @@
+{"input": 31915, "cleaned": 30402, "type:US_ROBOT": 10186, "dedup:source_url": 10478, "type:US_NOTICE": 584, "dedup:content_hash": 21437, "duplicates": 1513, "type:US_ARTICLE": 4518, "type:US_NEWS": 4544, "type:US_POST": 8830, "superseded": 464, "type:US_FLASH": 1740, "batch": "content_batch_0.ndjson"}
+{"input": 31915, "duplicates": 31915, "dedup:source_url": 10478, "dedup:content_hash": 21437, "batch": "content_batch_1.ndjson"}
