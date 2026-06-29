@@ -11,7 +11,9 @@ from typing import Any, BinaryIO, Iterable
 import orjson
 
 from src.dedup import finalize_record
+from src.event_view import build_event_record
 from src.dedup_db import RejectRow, StagingDB, StateVersionError
+from src.payload_store import DEFAULT_PAYLOAD_PART_BYTES, PayloadWriter
 from src.transform import TransformResult, transform_line
 
 DEFAULT_CHUNK_SIZE = 3000
@@ -81,6 +83,7 @@ def _reject_row(
 
 def _process_results(
     db: StagingDB,
+    payload_writer: PayloadWriter,
     batch: str,
     chunk: list[tuple[int, bytes]],
     results: Iterable[TransformResult],
@@ -99,8 +102,9 @@ def _process_results(
 
         stats["accepted"] += 1
         stats[f"type:{result.record['content_type']}"] += 1
-        row = db.insert_record_rows(batch, line_no, result.record)
-        stats[f"dedup:{row[-1]}"] += 1
+        payload_ref = payload_writer.write(result.record)
+        row = db.insert_record_rows(batch, line_no, result.record, payload_ref)
+        stats[f"dedup:{row[9]}"] += 1
         record_rows.append(row)
 
     db.add_chunk(batch, record_rows, reject_rows, stats["input"])
@@ -113,6 +117,7 @@ def ingest_batch(
     workers: int,
     chunk_size: int,
     force: bool,
+    payload_part_bytes: int,
 ) -> Counter[str] | None:
     batch = batch_file.name
     should_run = db.prepare_batch(batch, batch_file, force=force)
@@ -121,6 +126,7 @@ def ingest_batch(
 
     stats: Counter[str] = Counter()
     pool = ProcessPoolExecutor(max_workers=workers) if workers > 1 else None
+    payload_writer = PayloadWriter(db.payload_dir, batch, payload_part_bytes)
     try:
         with batch_file.open("rb") as handle:
             chunk: list[tuple[int, bytes]] = []
@@ -130,12 +136,13 @@ def ingest_batch(
                     continue
                 chunk.append((line_no, line))
                 if len(chunk) >= chunk_size:
-                    stats.update(_flush_chunk(db, batch, chunk, pool))
+                    stats.update(_flush_chunk(db, payload_writer, batch, chunk, pool))
                     chunk = []
 
             if chunk:
-                stats.update(_flush_chunk(db, batch, chunk, pool))
+                stats.update(_flush_chunk(db, payload_writer, batch, chunk, pool))
     finally:
+        payload_writer.close()
         if pool:
             pool.shutdown()
 
@@ -145,6 +152,7 @@ def ingest_batch(
 
 def _flush_chunk(
     db: StagingDB,
+    payload_writer: PayloadWriter,
     batch: str,
     chunk: list[tuple[int, bytes]],
     pool: ProcessPoolExecutor | None,
@@ -154,7 +162,7 @@ def _flush_chunk(
         results = list(pool.map(transform_line, lines, chunksize=64))
     else:
         results = [transform_line(line) for line in lines]
-    return _process_results(db, batch, chunk, results)
+    return _process_results(db, payload_writer, batch, chunk, results)
 
 
 def ingest_batches(
@@ -163,6 +171,7 @@ def ingest_batches(
     workers: int,
     chunk_size: int,
     force: bool,
+    payload_part_bytes: int,
 ) -> None:
     batches = discover_batches(input_dir)
     if not batches:
@@ -170,7 +179,7 @@ def ingest_batches(
         return
 
     for batch_file in batches:
-        stats = ingest_batch(batch_file, db, workers, chunk_size, force)
+        stats = ingest_batch(batch_file, db, workers, chunk_size, force, payload_part_bytes)
         if stats is None:
             print(f"Skip (done): {batch_file.name}")
             continue
@@ -206,34 +215,39 @@ def export_outputs(
     cleaned_dir: Path,
     dup_dir: Path,
     reject_dir: Path,
+    event_dir: Path,
     part_size: int,
 ) -> dict[str, int]:
     cleaned_tmp = _tmp_output_dir(cleaned_dir)
     dup_tmp = _tmp_output_dir(dup_dir)
     reject_tmp = _tmp_output_dir(reject_dir)
+    event_tmp = _tmp_output_dir(event_dir)
     writers = [
         PartWriter(cleaned_tmp, "cleaned", part_size),
         PartWriter(dup_tmp, "dup", part_size),
         PartWriter(reject_tmp, "reject", part_size),
+        PartWriter(event_tmp, "event", part_size),
     ]
     stats: Counter[str] = Counter()
 
     try:
         for row in db.canonical_rows():
-            record = orjson.loads(row["record_json"])
-            writers[0].write(
-                finalize_record(
-                    record,
-                    str(row["dedup_key"]),
-                    str(row["dedup_method"]),
-                    True,
-                    str(row["canonical_id"]),
-                )
+            record = db.load_record(row)
+            cleaned_record = finalize_record(
+                record,
+                str(row["dedup_key"]),
+                str(row["dedup_method"]),
+                True,
+                str(row["canonical_id"]),
+                orjson.loads(row["dedup_debug"]),
             )
+            writers[0].write(cleaned_record)
+            writers[3].write(build_event_record(cleaned_record))
             stats["cleaned"] += 1
+            stats["event_input"] += 1
 
         for row in db.duplicate_rows():
-            record = orjson.loads(row["record_json"])
+            record = db.load_record(row)
             writers[1].write(
                 finalize_record(
                     record,
@@ -241,6 +255,7 @@ def export_outputs(
                     str(row["dedup_method"]),
                     False,
                     str(row["canonical_id"]),
+                    orjson.loads(row["dedup_debug"]),
                 )
             )
             stats["duplicates"] += 1
@@ -264,6 +279,7 @@ def export_outputs(
     _replace_output_dir(cleaned_tmp, cleaned_dir)
     _replace_output_dir(dup_tmp, dup_dir)
     _replace_output_dir(reject_tmp, reject_dir)
+    _replace_output_dir(event_tmp, event_dir)
     return dict(stats)
 
 
@@ -272,20 +288,22 @@ def run(args: argparse.Namespace) -> None:
     cleaned_dir = Path(args.output)
     dup_dir = Path(args.duplicates)
     reject_dir = Path(args.rejects)
+    event_dir = Path(args.event_output)
     state_dir = Path(args.state)
+    payload_dir = Path(args.payload_dir)
     reports_dir = Path(args.reports)
 
     try:
-        db = StagingDB(state_dir / "dedup.db", reset=args.reset_state)
+        db = StagingDB(state_dir / "dedup.db", payload_dir=payload_dir, reset=args.reset_state)
     except StateVersionError as exc:
         raise SystemExit(str(exc)) from exc
 
     try:
         if not args.export_only:
-            ingest_batches(input_dir, db, args.workers, args.chunk_size, args.force)
+            ingest_batches(input_dir, db, args.workers, args.chunk_size, args.force, args.payload_part_bytes)
 
-        export_stats = export_outputs(db, cleaned_dir, dup_dir, reject_dir, args.part_size)
-        summary = db.write_reports(reports_dir, state_dir / "progress.json")
+        export_stats = export_outputs(db, cleaned_dir, dup_dir, reject_dir, event_dir, args.part_size)
+        summary = db.write_reports(reports_dir, state_dir / "progress.json", cleaned_dir, dup_dir, reject_dir, event_dir)
     finally:
         db.close()
 
@@ -299,11 +317,19 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", default="output/cleaned", help="Cleaned output directory")
     parser.add_argument("--duplicates", default="output/duplicates", help="Duplicates output directory")
     parser.add_argument("--rejects", default="output/rejects", help="Rejected-row quarantine output directory")
+    parser.add_argument("--event-output", default="output/event_input", help="Event extraction input output directory")
     parser.add_argument("--state", default="state", help="State directory (dedup.db, progress.json)")
+    parser.add_argument("--payload-dir", default="state/payloads", help="External transformed-record payload directory")
     parser.add_argument("--reports", default="reports", help="Reports directory")
     parser.add_argument("--workers", type=positive_int, default=4, help="Process pool workers per batch")
     parser.add_argument("--chunk-size", type=positive_int, default=DEFAULT_CHUNK_SIZE, help="Transform/insert chunk size")
     parser.add_argument("--part-size", type=positive_int, default=DEFAULT_PART_SIZE, help="Rows per output part")
+    parser.add_argument(
+        "--payload-part-bytes",
+        type=positive_int,
+        default=DEFAULT_PAYLOAD_PART_BYTES,
+        help="Maximum bytes per transformed-record payload part",
+    )
     parser.add_argument("--force", action="store_true", help="Safely reprocess completed batches")
     parser.add_argument("--export-only", action="store_true", help="Skip ingest and rebuild outputs/reports from staging DB")
     parser.add_argument("--reset-state", action="store_true", help="Delete staging DB before running")

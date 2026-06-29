@@ -1,0 +1,118 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EventRecord",
+  "description": "Compact record intended for financial event concept extraction. Audit-only fields such as dedup, meta, type_code, summary, and updated_at are intentionally omitted.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "content_type", "title", "published_at"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable source record id."
+    },
+    "content_type": {
+      "type": "string",
+      "enum": ["US_NEWS", "US_ROBOT", "US_ARTICLE", "US_FLASH", "US_POST", "US_NOTICE"],
+      "description": "Business content type."
+    },
+    "title": {
+      "type": "string",
+      "description": "Clean title, useful as the event headline."
+    },
+    "body": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Clean body text. Omitted for attachment-only notices."
+    },
+    "published_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC publication timestamp."
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "name": { "type": "string" },
+        "url": { "type": "string" }
+      }
+    },
+    "entities": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "stocks": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/definitions/stockEntity" }
+        },
+        "crypto": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/definitions/cryptoEntity" }
+        }
+      }
+    },
+    "topics": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Topic tags after removing importance and region tags.",
+      "items": { "type": "string" }
+    },
+    "importance": {
+      "type": "string",
+      "enum": ["high", "mid", "low"]
+    },
+    "regions": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string" }
+    },
+    "notice": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "filing_type": { "type": "string" },
+        "declare_date": { "type": "string" },
+        "attachments": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/definitions/noticeAttachment" }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "stockEntity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["symbol", "name"],
+      "properties": {
+        "symbol": { "type": "string" },
+        "name": { "type": "string" }
+      }
+    },
+    "cryptoEntity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "name"],
+      "properties": {
+        "code": { "type": "string" },
+        "name": { "type": "string" }
+      }
+    },
+    "noticeAttachment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "file_type"],
+      "properties": {
+        "url": { "type": "string" },
+        "file_type": { "type": "string" }
+      }
+    }
+  }
+}

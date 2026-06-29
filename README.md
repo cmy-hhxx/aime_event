@@ -1,13 +1,12 @@
 # aime_event
 
-Clean and deduplicate financial consultation NDJSON batches.
+Clean, deduplicate, and prepare financial consultation NDJSON batches.
 
-The pipeline is intentionally two-phase:
+The pipeline has three outputs:
 
-1. `ingest`: parse raw `content_batch_*.ndjson`, transform valid records, and store candidates/rejects in SQLite staging.
-2. `export`: select final canonicals from staging and write global output parts atomically.
-
-This avoids the old streaming-output bug where a later, longer canonical could not remove an earlier `cleaned` row.
+- `cleaned`: full audit records with provenance and dedup metadata.
+- `duplicates`: records folded by id or dedup key, with `dedup.canonical_id`.
+- `event_input`: compact records for financial event concept extraction.
 
 ## Setup
 
@@ -18,13 +17,13 @@ python3 -m venv .venv
 
 ## Run
 
-Fresh run against the default directories:
+Fresh run:
 
 ```bash
 .venv/bin/python -m src.main --reset-state
 ```
 
-Custom directories:
+Custom run:
 
 ```bash
 .venv/bin/python -m src.main \
@@ -32,7 +31,9 @@ Custom directories:
   --output output/cleaned \
   --duplicates output/duplicates \
   --rejects output/rejects \
+  --event-output output/event_input \
   --state state \
+  --payload-dir state/payloads \
   --reports reports \
   --workers 4 \
   --chunk-size 3000 \
@@ -41,35 +42,59 @@ Custom directories:
 
 Useful modes:
 
-- `--export-only`: rebuild `output/*` and reports from the existing staging DB.
-- `--force`: safely reprocess already completed batches by deleting only that batch from staging first.
-- `--reset-state`: delete the staging DB and rebuild from raw input. Required when moving from the old `dedup_index` state schema.
+- `--export-only`: rebuild outputs/reports from existing v3 staging state.
+- `--force`: reprocess completed batches by deleting that batch's SQLite rows and payload files first.
+- `--reset-state`: delete staging DB and payloads before ingest. Required when moving from v1/v2 state.
+- `--payload-dir`: place transformed-record payloads on a larger disk while keeping SQLite state elsewhere.
 
-## Outputs
+## Storage Model
 
-- `output/cleaned/cleaned_part_00000.ndjson`: final canonical records.
-- `output/duplicates/dup_part_00000.ndjson`: duplicate records with `dedup.canonical_id`.
-- `output/rejects/reject_part_00000.ndjson`: invalid JSON, missing required fields, empty non-notice bodies, and other rejected rows.
-- `reports/batch_stats.jsonl`: per-batch ingest status from SQLite.
-- `reports/summary.json`: global counts rebuilt from SQLite, so resume/export-only runs stay consistent.
-- `state/dedup.db`: SQLite staging state.
-- `state/progress.json`: human-readable completed-batch snapshot generated from SQLite.
+SQLite v3 stores only lightweight indexing fields: ids, dedup keys, timestamps, body length, title normalization, and payload offsets. Full transformed records are written to `state/payloads/*_part_*.ndjson`.
+
+This avoids the earlier v2 behavior where `state/dedup.db` stored complete `record_json` payloads. `reports/summary.json` includes storage totals and a linear 20M-row estimate:
+
+```json
+{
+  "storage": {
+    "db_bytes": 0,
+    "payload_bytes": 0,
+    "cleaned_bytes": 0,
+    "event_input_bytes": 0,
+    "estimated_20m_rows_bytes": 0
+  }
+}
+```
+
+For large runs, budget disk for raw input, SQLite state, payloads, cleaned output, duplicates, rejects, event input, and temporary export files. On this machine, the current free space is not enough for raw + all generated artifacts at 20M rows.
 
 ## Dedup Rules
 
-Records with the same raw `_id` are folded first. Among repeated IDs, canonical selection is deterministic:
+Canonical selection is deterministic:
 
 ```text
-body_len DESC, published_at DESC, id ASC
+body_len DESC, published_at DESC, id ASC, batch ASC, line_no ASC
 ```
 
-The surviving ID candidates are then deduplicated by primary key:
+Dedup v3 key precedence:
 
-1. Eligible article URL: `url:{source.url}`.
-2. Feed/list/API URL or no URL: `hash:{md5(normalized_title|normalized_body)}`.
-3. Empty title/body fallback: `id:{id}`.
+1. `US_NOTICE`: SEC accession from attachment URL, or SHA-256 of normalized attachment URL.
+2. Eligible article URL: normalized `source.url`.
+3. Feed/list/API URL or no eligible URL: SHA-256 of normalized title/body.
+4. Empty title/body fallback: raw id.
 
-Feed/list/API URL denylist includes Reuters outbound sitemap/feed URLs, sitemap URLs, Bloomberg lineup API URLs, `outputType=xml`, `pageNumber`/`limit` list queries, and `/market-news`.
+URL normalization lowercases scheme/host, removes fragments, strips common tracking params such as `utm_*`, `mod`, and `r`, sorts remaining query parameters, and normalizes trailing slashes. Feed/list/API URLs are still denied as URL keys, including Reuters outboundfeeds/sitemap, Bloomberg lineup API, `outputType=xml`, `pageNumber`/`limit`, and `/market-news`.
+
+Near duplicates are not automatically removed. `reports/near_duplicates.jsonl` records conservative candidates such as repeated normalized titles for manual review.
+
+## Schemas
+
+- `schema/cleaned_record.schema.json`: full audit contract.
+- `schema/event_record.schema.json`: compact extraction input contract.
+- `schema/cleaned_record.schema.jsonc`: human-readable schema notes.
+
+`cleaned` keeps audit fields: `type_code`, `updated_at`, `source.author`, `meta`, raw-derived `tags`, and `dedup`.
+
+`event_input` intentionally omits audit-only fields: `dedup`, `meta`, `type_code`, `summary`, `updated_at`, empty source/entity/topic arrays, and null notices. Raw `tags` become `topics` after removing importance and region tags.
 
 ## Quality Gates
 
@@ -85,10 +110,20 @@ Run type checking:
 pyright src
 ```
 
-Check a generated cleaned directory has no duplicate canonical keys:
+Check cleaned has no duplicate canonical keys:
 
 ```bash
 jq -r '.dedup.key' output/cleaned/*.ndjson | sort | uniq -d
 ```
 
-The executable cleaned-record contract is `schema/cleaned_record.schema.json`. The JSONC file is documentation only.
+Check event input is smaller than cleaned:
+
+```bash
+du -h output/cleaned output/event_input
+```
+
+Run a synthetic benchmark:
+
+```bash
+.venv/bin/python scripts/benchmark_synthetic.py --rows 100000 --workers 4
+```

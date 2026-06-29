@@ -1,18 +1,22 @@
 {
-  // Human-readable notes for schema/cleaned_record.schema.json.
+  // Human-readable companion for schema/cleaned_record.schema.json.
   //
-  // Output format:
-  // - output/cleaned/cleaned_part_00000.ndjson contains final canonical records.
-  // - output/duplicates/dup_part_00000.ndjson contains records folded by id or dedup key.
-  // - output/rejects/reject_part_00000.ndjson contains invalid or low-quality input rows.
+  // cleaned_record is the audit format:
+  // - keeps source.url exactly as received;
+  // - keeps meta/dedup fields for traceability;
+  // - keeps type_code/updated_at for compatibility;
+  // - validates dedup.version = 3.
   //
-  // Dedup rules:
-  // 1. Repeated raw _id records are folded first.
-  // 2. Eligible article URLs are deduped by URL.
-  // 3. Feed/list/API URLs fall back to md5(normalized_title|normalized_body).
-  // 4. Canonical choice is deterministic: body_len DESC, published_at DESC, id ASC.
+  // event_record is the extraction format:
+  // - emitted to output/event_input/event_part_*.ndjson;
+  // - omits dedup, meta, type_code, summary, and updated_at;
+  // - removes empty source/entities/topics/notice fields;
+  // - turns raw tags into topics by removing region and importance tags.
   //
-  // This JSONC file is documentation only. The executable contract is the strict
-  // JSON schema in cleaned_record.schema.json.
+  // Dedup v3:
+  // 1. US_NOTICE uses SEC accession or attachment URL.
+  // 2. Eligible article URLs are normalized before URL dedup.
+  // 3. Feed/list/API URLs fall back to SHA-256 of normalized title/body.
+  // 4. Repeated raw ids are folded before content-level dedup.
   "$ref": "./cleaned_record.schema.json"
 }

@@ -1,11 +1,38 @@
 {
-  "total_input": 0,
-  "total_cleaned": 0,
-  "total_duplicates": 0,
-  "total_rejected": 0,
-  "total_superseded": 0,
-  "dedup_index_size": 60340,
-  "by_content_type": {},
-  "dedup_by_method": {},
-  "batches_processed": 2
+  "batches_completed": 1,
+  "by_content_type": {
+    "US_ARTICLE": 4332,
+    "US_FLASH": 1739,
+    "US_NEWS": 5242,
+    "US_NOTICE": 584,
+    "US_POST": 8830,
+    "US_ROBOT": 9761
+  },
+  "dedup_by_method": {
+    "content_hash": 21417,
+    "notice_attachment": 584,
+    "source_url": 8487
+  },
+  "duplicate_by_method": {
+    "content_hash": 26,
+    "source_url": 1214
+  },
+  "rejects_by_reason": {
+    "empty_body": 187
+  },
+  "storage": {
+    "cleaned_bytes": 93640830,
+    "db_bytes": 81649664,
+    "duplicates_bytes": 3210985,
+    "estimated_20m_rows_bytes": 211864143506,
+    "event_input_bytes": 73975844,
+    "payload_bytes": 85107612,
+    "rejects_bytes": 497272,
+    "total_pipeline_bytes": 338082207
+  },
+  "total_accepted": 31728,
+  "total_cleaned": 30488,
+  "total_duplicates": 1240,
+  "total_input": 31915,
+  "total_rejected": 187
 }
