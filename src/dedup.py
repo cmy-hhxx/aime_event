@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Iterator
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-DEDUP_VERSION = 3
+DEDUP_VERSION = 4
 
 _WHITESPACE_RE = re.compile(r"\s+")
 _SEC_ACCESSION_RE = re.compile(r"/archives/edgar/data/\d+/([^/]+)/", re.IGNORECASE)

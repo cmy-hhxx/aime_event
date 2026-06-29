@@ -1,23 +1,10 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "CleanedRecord",
-  "description": "Full audit record produced by the cleaning pipeline. This format keeps provenance, raw-derived fields, and dedup metadata so records can be traced back and re-exported.",
+  "description": "Full audit record produced by the AIME event cleaning pipeline. Optional fields are omitted when source data is empty; public outputs never use null.",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "id",
-    "content_type",
-    "type_code",
-    "title",
-    "body",
-    "published_at",
-    "updated_at",
-    "source",
-    "entities",
-    "tags",
-    "dedup",
-    "meta"
-  ],
+  "required": ["id", "content_type", "title", "published_at", "dedup"],
   "properties": {
     "id": {
       "type": "string",
@@ -31,7 +18,7 @@
     },
     "type_code": {
       "type": "integer",
-      "description": "Original numeric content type from raw type. Kept for audit compatibility; event_input omits it."
+      "description": "Original numeric raw type, kept for audit compatibility."
     },
     "title": {
       "type": "string",
@@ -39,73 +26,81 @@
     },
     "body": {
       "type": "string",
-      "description": "Plain text converted from raw HTML content. US_NOTICE may be empty when information is in notice.attachments."
+      "minLength": 1,
+      "description": "Plain text converted from raw HTML content. Omitted for attachment-only notices."
     },
     "summary": {
-      "type": ["string", "null"],
-      "description": "Optional source summary. Null means source summary was missing or blank."
+      "type": "string",
+      "minLength": 1,
+      "description": "Source summary when present."
     },
     "published_at": {
       "type": "string",
       "format": "date-time",
-      "description": "UTC ISO timestamp derived from raw ctime. Required for accepted records."
+      "description": "UTC ISO timestamp derived from raw ctime."
     },
     "updated_at": {
       "type": "string",
       "format": "date-time",
-      "description": "UTC ISO timestamp derived from raw rtime. Falls back to published_at when rtime is missing."
+      "description": "UTC ISO timestamp derived from raw rtime, falling back to published_at when missing."
     },
     "source": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "url", "author"],
-      "description": "Source attribution from raw news/source/author fields. Values may be null when absent.",
+      "minProperties": 1,
+      "description": "Source attribution from raw news/source/author fields. Empty source fields are omitted.",
       "properties": {
-        "name": { "type": ["string", "null"], "description": "Publisher or source name." },
-        "url": { "type": ["string", "null"], "description": "Original source URL, not dedup-normalized." },
-        "author": { "type": ["string", "null"], "description": "Source author name when present." }
+        "name": { "type": "string", "minLength": 1, "description": "Publisher or source name." },
+        "url": { "type": "string", "minLength": 1, "description": "Original source URL, not dedup-normalized." },
+        "author": { "type": "string", "minLength": 1, "description": "Source author when present." }
       }
     },
     "entities": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["stocks", "crypto"],
+      "minProperties": 1,
       "description": "Entities extracted from source link metadata, not model-generated NER.",
       "properties": {
         "stocks": {
           "type": "array",
+          "minItems": 1,
           "items": { "$ref": "#/definitions/stockEntity" }
         },
         "crypto": {
           "type": "array",
+          "minItems": 1,
           "items": { "$ref": "#/definitions/cryptoEntity" }
         }
       }
     },
     "tags": {
       "type": "array",
-      "description": "Raw non-numeric classification tags after light filtering. Includes importance and region tags for audit compatibility.",
-      "items": { "type": "string" }
+      "minItems": 1,
+      "description": "Raw non-numeric classification tags after light filtering.",
+      "items": { "type": "string", "minLength": 1 }
     },
     "importance": {
-      "type": ["string", "null"],
-      "enum": ["high", "mid", "low", null],
+      "type": "string",
+      "enum": ["high", "mid", "low"],
       "description": "Derived from us_high_importance/us_mid_importance/us_low_importance tags."
     },
     "regions": {
       "type": "array",
+      "minItems": 1,
       "description": "Region tags derived from contentTagMap.",
-      "items": { "type": "string" }
+      "items": { "type": "string", "minLength": 1 }
     },
     "notice": {
-      "type": ["object", "null"],
+      "type": "object",
       "additionalProperties": false,
-      "description": "SEC notice metadata for US_NOTICE; null for other content types.",
+      "minProperties": 1,
+      "description": "SEC notice metadata for US_NOTICE when present.",
       "properties": {
-        "filing_type": { "type": "string", "description": "Source noticeInfo.noticeType." },
-        "declare_date": { "type": "string", "description": "Source noticeInfo.declareDate." },
+        "filing_type": { "type": "string", "minLength": 1, "description": "Source noticeInfo.noticeType." },
+        "declare_date": { "type": "string", "minLength": 1, "description": "Source noticeInfo.declareDate." },
         "attachments": {
           "type": "array",
+          "minItems": 1,
           "items": { "$ref": "#/definitions/noticeAttachment" }
         }
       }
@@ -114,13 +109,13 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["version", "key", "method", "is_canonical", "canonical_id", "debug"],
-      "description": "Dedup decision metadata. The key is normalized; source.url remains original.",
+      "description": "Dedup decision metadata. Exact and high-confidence near-duplicate decisions are auditable here.",
       "properties": {
-        "version": { "type": "integer", "enum": [3] },
-        "key": { "type": "string", "description": "Normalized dedup key used by the v3 pipeline." },
+        "version": { "type": "integer", "enum": [4] },
+        "key": { "type": "string", "minLength": 1, "description": "Normalized dedup key." },
         "method": {
           "type": "string",
-          "enum": ["source_url", "content_hash", "notice_attachment", "id"]
+          "enum": ["source_url", "content_hash", "notice_attachment", "near_minhash", "id"]
         },
         "is_canonical": { "type": "boolean" },
         "canonical_id": { "type": "string", "minLength": 1 },
@@ -130,13 +125,13 @@
     "meta": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["material_id"],
-      "description": "Source-system provenance fields. Useful for audit, not for event extraction.",
+      "minProperties": 1,
+      "description": "Source-system provenance fields. Empty provenance fields are omitted.",
       "properties": {
-        "language": { "type": ["string", "null"], "description": "Raw language." },
-        "gid": { "type": ["string", "null"], "description": "Raw news.gid material group id." },
-        "material_id": { "type": "string", "description": "Raw materialId." },
-        "uid": { "type": ["string", "null"], "description": "Raw extensions.uid, often populated for syndicated news." }
+        "language": { "type": "string", "minLength": 1, "description": "Raw language." },
+        "gid": { "type": "string", "minLength": 1, "description": "Raw news.gid material group id." },
+        "material_id": { "type": "string", "minLength": 1, "description": "Raw materialId." },
+        "uid": { "type": "string", "minLength": 1, "description": "Raw extensions.uid." }
       }
     }
   },
@@ -146,8 +141,8 @@
       "additionalProperties": false,
       "required": ["symbol", "name"],
       "properties": {
-        "symbol": { "type": "string" },
-        "name": { "type": "string" }
+        "symbol": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 }
       }
     },
     "cryptoEntity": {
@@ -155,17 +150,17 @@
       "additionalProperties": false,
       "required": ["code", "name"],
       "properties": {
-        "code": { "type": "string" },
-        "name": { "type": "string" }
+        "code": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 }
       }
     },
     "noticeAttachment": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["url", "file_type"],
+      "required": ["url"],
       "properties": {
-        "url": { "type": "string" },
-        "file_type": { "type": "string" }
+        "url": { "type": "string", "minLength": 1 },
+        "file_type": { "type": "string", "minLength": 1 }
       }
     },
     "dedupDebug": {
@@ -173,15 +168,30 @@
       "additionalProperties": false,
       "required": ["version", "source"],
       "properties": {
-        "version": { "type": "integer", "enum": [3] },
-        "source": { "type": "string" },
-        "source_url": { "type": ["string", "null"] },
-        "normalized_url": { "type": ["string", "null"] },
-        "rejected_url_reason": { "type": ["string", "null"] },
-        "hash_algorithm": { "type": ["string", "null"] },
-        "text_normalization": { "type": ["string", "null"] },
-        "notice_accession": { "type": ["string", "null"] },
-        "notice_attachment_url": { "type": ["string", "null"] }
+        "version": { "type": "integer", "enum": [4] },
+        "source": { "type": "string", "minLength": 1 },
+        "source_url": { "type": "string", "minLength": 1 },
+        "normalized_url": { "type": "string", "minLength": 1 },
+        "rejected_url_reason": { "type": "string", "minLength": 1 },
+        "hash_algorithm": { "type": "string", "minLength": 1 },
+        "text_normalization": { "type": "string", "minLength": 1 },
+        "notice_accession": { "type": "string", "minLength": 1 },
+        "notice_attachment_url": { "type": "string", "minLength": 1 },
+        "cluster_id": { "type": "string", "minLength": 1 },
+        "minhash_threshold": { "type": "number" },
+        "fuzzy_threshold": { "type": "number" },
+        "scores": { "$ref": "#/definitions/nearScores" },
+        "reason": { "type": "string", "minLength": 1 }
+      }
+    },
+    "nearScores": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minhash_jaccard", "fuzzy_score", "title_score"],
+      "properties": {
+        "minhash_jaccard": { "type": "number" },
+        "fuzzy_score": { "type": "number" },
+        "title_score": { "type": "number" }
       }
     }
   }

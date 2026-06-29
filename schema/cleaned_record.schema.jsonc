@@ -3,20 +3,24 @@
   //
   // cleaned_record is the audit format:
   // - keeps source.url exactly as received;
-  // - keeps meta/dedup fields for traceability;
-  // - keeps type_code/updated_at for compatibility;
-  // - validates dedup.version = 3.
+  // - keeps meta/dedup fields for traceability when values exist;
+  // - keeps type_code/updated_at for compatibility when values exist;
+  // - omits optional fields when source data is empty;
+  // - never emits null in public output;
+  // - validates dedup.version = 4.
   //
   // event_record is the extraction format:
   // - emitted to output/event_input/event_part_*.ndjson;
   // - omits dedup, meta, type_code, summary, and updated_at;
   // - removes empty source/entities/topics/notice fields;
+  // - never emits null;
   // - turns raw tags into topics by removing region and importance tags.
   //
-  // Dedup v3:
+  // Dedup v4:
   // 1. US_NOTICE uses SEC accession or attachment URL.
   // 2. Eligible article URLs are normalized before URL dedup.
   // 3. Feed/list/API URLs fall back to SHA-256 of normalized title/body.
   // 4. Repeated raw ids are folded before content-level dedup.
+  // 5. Exact canonical records may be merged by high-confidence MinHash + RapidFuzz near dedup.
   "$ref": "./cleaned_record.schema.json"
 }

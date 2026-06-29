@@ -35,6 +35,12 @@ def _raw(
 
 def _write_input(input_dir: Path) -> None:
     input_dir.mkdir(parents=True)
+    near_body = (
+        "Apple shares rose after the company reported stronger quarterly earnings "
+        "and raised its full year outlook. Analysts pointed to resilient iPhone demand, "
+        "higher services revenue, and improving margins as the main drivers of the move. "
+        "The update lifted sentiment across large technology stocks during afternoon trading."
+    )
     rows: list[bytes] = [
         orjson.dumps(_raw("short", "Shared URL", "short body")),
         orjson.dumps(_raw("long", "Shared URL", "this body is much longer than the first", "https://example.com/news/story-1")),
@@ -76,6 +82,22 @@ def _write_input(input_dir: Path) -> None:
                 "Reuters story A",
                 "Alpha body with extra words",
                 "https://www.reuters.com/arc/outboundfeeds/news-sitemap/?outputType=xml",
+            )
+        ),
+        orjson.dumps(
+            _raw(
+                "near-a",
+                "Apple shares rise after earnings outlook",
+                near_body,
+                "https://example.com/news/apple-earnings-a",
+            )
+        ),
+        orjson.dumps(
+            _raw(
+                "near-b",
+                "Apple stock rises after earnings outlook",
+                near_body,
+                "https://example.com/news/apple-earnings-b",
             )
         ),
         orjson.dumps(
@@ -139,6 +161,20 @@ def _read_parts(directory: Path) -> list[dict]:
     return records
 
 
+def _read_jsonl(path: Path) -> list[dict]:
+    return [orjson.loads(line) for line in path.read_bytes().splitlines() if line]
+
+
+def _has_null(value: object) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, dict):
+        return any(_has_null(item) for item in value.values())
+    if isinstance(value, list):
+        return any(_has_null(item) for item in value)
+    return False
+
+
 def _semantic_summary(summary: dict) -> dict:
     return {key: value for key, value in summary.items() if key != "storage"}
 
@@ -157,25 +193,28 @@ def test_pipeline_exports_deterministic_global_parts_and_rejects(tmp_path: Path)
     validator = jsonschema.Draft7Validator(schema, format_checker=jsonschema.FormatChecker())
     event_validator = jsonschema.Draft7Validator(event_schema, format_checker=jsonschema.FormatChecker())
 
-    assert len(cleaned) == 5
-    assert len(duplicates) == 3
+    assert len(cleaned) == 6
+    assert len(duplicates) == 4
     assert len(event_records) == len(cleaned)
     assert len(rejects) == 3
     assert len({record["dedup"]["key"] for record in cleaned}) == len(cleaned)
-    assert {record["id"] for record in cleaned} == {"long", "seek-long", "feed-a", "feed-b", "notice"}
+    assert {record["id"] for record in cleaned} == {"long", "seek-long", "feed-a", "feed-b", "near-a", "notice"}
 
     feed_records = [record for record in cleaned if record["id"].startswith("feed-")]
     assert all(record["dedup"]["method"] == "content_hash" for record in feed_records)
-    assert all(record["dedup"]["version"] == 3 for record in cleaned + duplicates)
+    assert all(record["dedup"]["version"] == 4 for record in cleaned + duplicates)
 
     duplicate_methods = {record["id"]: record["dedup"]["method"] for record in duplicates}
     assert duplicate_methods["short"] == "source_url"
     assert duplicate_methods["seek-short"] == "source_url"
     assert duplicate_methods["feed-a"] == "id"
+    assert duplicate_methods["near-b"] == "near_minhash"
 
     for record in cleaned + duplicates:
+        assert not _has_null(record)
         validator.validate(record)
     for record in event_records:
+        assert not _has_null(record)
         event_validator.validate(record)
         assert "dedup" not in record
         assert "meta" not in record
@@ -183,14 +222,17 @@ def test_pipeline_exports_deterministic_global_parts_and_rejects(tmp_path: Path)
         assert "updated_at" not in record
 
     summary = json.loads((tmp_path / "reports" / "summary.json").read_text())
-    assert summary["total_input"] == 11
-    assert summary["total_cleaned"] == 5
-    assert summary["total_duplicates"] == 3
+    assert summary["total_input"] == 13
+    assert summary["total_cleaned"] == 6
+    assert summary["total_duplicates"] == 4
     assert summary["total_rejected"] == 3
+    assert summary["near_duplicate_candidates"] >= 1
+    assert summary["near_duplicates_auto_merged"] >= 1
     assert summary["storage"]["db_bytes"] > 0
     assert summary["storage"]["payload_bytes"] > 0
     assert summary["storage"]["estimated_20m_rows_bytes"] > summary["storage"]["db_bytes"]
-    assert (tmp_path / "reports" / "near_duplicates.jsonl").exists()
+    near_report = _read_jsonl(tmp_path / "reports" / "near_duplicates.jsonl")
+    assert any(record.get("status") == "auto_merged" for record in near_report)
 
 
 def test_resume_export_only_and_force_are_stable(tmp_path: Path) -> None:

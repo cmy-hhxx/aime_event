@@ -2,9 +2,14 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.cleaning import prune_public_record
 from src.transform import IMPORTANCE_MAP, REGION_TAGS
 
 _IMPORTANCE_TAGS = set(IMPORTANCE_MAP)
+
+
+def build_cleaned_record(record: dict[str, Any]) -> dict[str, Any]:
+    return prune_public_record(record)
 
 
 def build_event_record(cleaned: dict[str, Any]) -> dict[str, Any]:
@@ -41,7 +46,7 @@ def build_event_record(cleaned: dict[str, Any]) -> dict[str, Any]:
     if notice:
         event["notice"] = notice
 
-    return event
+    return prune_public_record(event)
 
 
 def _compact_source(source: dict[str, Any]) -> dict[str, str]:

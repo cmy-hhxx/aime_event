@@ -108,7 +108,7 @@
     "noticeAttachment": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["url", "file_type"],
+      "required": ["url"],
       "properties": {
         "url": { "type": "string" },
         "file_type": { "type": "string" }

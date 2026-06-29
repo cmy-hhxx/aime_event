@@ -2,3 +2,5 @@ orjson>=3.9
 html2text>=2024.2
 jsonschema>=4.0
 pytest>=8.0
+datasketch>=1.6
+rapidfuzz>=3.0

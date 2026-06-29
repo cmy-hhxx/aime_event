@@ -3,36 +3,40 @@
   "by_content_type": {
     "US_ARTICLE": 4332,
     "US_FLASH": 1739,
-    "US_NEWS": 5242,
+    "US_NEWS": 5235,
     "US_NOTICE": 584,
-    "US_POST": 8830,
-    "US_ROBOT": 9761
+    "US_POST": 8828,
+    "US_ROBOT": 9745
   },
   "dedup_by_method": {
-    "content_hash": 21417,
+    "content_hash": 21398,
     "notice_attachment": 584,
-    "source_url": 8487
+    "source_url": 8481
   },
   "duplicate_by_method": {
     "content_hash": 26,
+    "near_minhash": 25,
     "source_url": 1214
   },
+  "near_duplicate_candidates": 3124,
+  "near_duplicates_auto_merged": 25,
+  "near_duplicates_report_only": 3096,
   "rejects_by_reason": {
     "empty_body": 187
   },
   "storage": {
-    "cleaned_bytes": 93640830,
-    "db_bytes": 81649664,
-    "duplicates_bytes": 3210985,
-    "estimated_20m_rows_bytes": 211864143506,
-    "event_input_bytes": 73975844,
+    "cleaned_bytes": 90170996,
+    "db_bytes": 262066176,
+    "duplicates_bytes": 3139842,
+    "estimated_20m_rows_bytes": 322693159956,
+    "event_input_bytes": 73955712,
     "payload_bytes": 85107612,
     "rejects_bytes": 497272,
-    "total_pipeline_bytes": 338082207
+    "total_pipeline_bytes": 514937610
   },
   "total_accepted": 31728,
-  "total_cleaned": 30488,
-  "total_duplicates": 1240,
+  "total_cleaned": 30463,
+  "total_duplicates": 1265,
   "total_input": 31915,
   "total_rejected": 187
 }
