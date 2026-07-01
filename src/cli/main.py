@@ -45,6 +45,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--chunk-size", type=positive_int, help="高级覆盖：transform 分块行数")
     parser.add_argument("--part-size", type=positive_int, help="高级覆盖：每个输出分片最大行数")
     parser.add_argument("--payload-part-bytes", type=positive_int, help="高级覆盖：payload 分片字节数")
+    parser.add_argument("--log-every-rows", type=positive_int, help="高级覆盖：每处理多少行打印一次进度")
+    parser.add_argument("--log-every-seconds", type=positive_int, help="高级覆盖：至少每隔多少秒打印一次进度")
     parser.add_argument("--near-min-body-chars", type=positive_int, help="高级覆盖：近似去重正文最短字符数")
     parser.add_argument("--near-threshold", type=positive_float, help="高级覆盖：MinHash Jaccard 阈值")
     parser.add_argument("--near-fuzzy-threshold", type=positive_float, help="高级覆盖：RapidFuzz 正文相似度阈值")
@@ -76,7 +78,14 @@ def config_from_args(args: argparse.Namespace, base: PipelineConfig = DEFAULT_CO
         path_updates["reports_dir"] = Path(args.reports)
 
     runtime_updates = {}
-    for key in ("workers", "chunk_size", "part_size", "payload_part_bytes"):
+    for key in (
+        "workers",
+        "chunk_size",
+        "part_size",
+        "payload_part_bytes",
+        "log_every_rows",
+        "log_every_seconds",
+    ):
         value = getattr(args, key)
         if value is not None:
             runtime_updates[key] = value

@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import time
 from collections import Counter
 from itertools import combinations
 from typing import Any
 
 from src.dedup.exact import DEDUP_VERSION
 from src.dedup.near import NearDecision, NearDuplicateDetector, NearSignature, UnionFind
+
+
+def _log(message: str) -> None:
+    print(message, flush=True)
 
 
 def _canonical_sort_key(row: sqlite3.Row) -> tuple[int, float, str, str, int]:
@@ -57,7 +62,11 @@ class WinnerMixin:
     def build_winner_tables(self) -> None:
         if self._winners_valid:
             return
+        started_at = time.monotonic()
+        total_records = self.conn.execute("SELECT COUNT(*) AS count FROM records").fetchone()["count"]
+        _log(f"Dedup: build winner tables start records={total_records:,}")
         with self.conn:
+            _log("Dedup: exact step creating id_winners and dedup_winners")
             self.conn.executescript(
                 f"""
                 DROP TABLE IF EXISTS id_winners;
@@ -99,10 +108,14 @@ class WinnerMixin:
                 CREATE INDEX idx_dedup_winners_title_norm ON dedup_winners(title_norm);
                 """
             )
+        id_count = self.conn.execute("SELECT COUNT(*) AS count FROM id_winners").fetchone()["count"]
+        dedup_count = self.conn.execute("SELECT COUNT(*) AS count FROM dedup_winners").fetchone()["count"]
+        _log(f"Dedup: exact winners ready id_winners={id_count:,} dedup_winners={dedup_count:,}")
 
         self._build_near_duplicate_tables()
 
         with self.conn:
+            _log("Dedup: creating duplicate_records")
             self.conn.executescript(
                 f"""
                 DROP TABLE IF EXISTS duplicate_records;
@@ -214,9 +227,13 @@ class WinnerMixin:
                 CREATE INDEX idx_duplicate_records_id ON duplicate_records(id);
                 """
             )
+        duplicate_count = self.conn.execute("SELECT COUNT(*) AS count FROM duplicate_records").fetchone()["count"]
+        elapsed = time.monotonic() - started_at
+        _log(f"Dedup: winner tables ready duplicates={duplicate_count:,} elapsed={elapsed:.1f}s")
         self._winners_valid = True
 
     def _build_near_duplicate_tables(self) -> None:
+        _log("Dedup: resetting near-duplicate tables")
         with self.conn:
             self.conn.executescript(
                 """
@@ -228,8 +245,10 @@ class WinnerMixin:
             )
 
         if not self.near_config.enabled:
+            _log("Dedup: near-duplicate merge disabled")
             return
 
+        started_at = time.monotonic()
         detector = NearDuplicateDetector(self.near_config)
         rows = self.conn.execute(
             """SELECT * FROM dedup_winners
@@ -237,10 +256,11 @@ class WinnerMixin:
         ).fetchall()
         row_by_id = {str(row["id"]): row for row in rows}
         signature_by_id: dict[str, NearSignature] = {}
+        _log(f"Dedup: near-duplicate signatures start candidates={len(rows):,}")
 
         signature_rows = []
         bucket_rows = []
-        for row in rows:
+        for index, row in enumerate(rows, start=1):
             record = self.load_record(row)
             signature = detector.signature_for(record)
             if signature is None:
@@ -258,6 +278,9 @@ class WinnerMixin:
             )
             for band_no, bucket_key in detector.band_keys(signature.signature):
                 bucket_rows.append((band_no, bucket_key, signature.record_id))
+            if index % 50_000 == 0:
+                elapsed = time.monotonic() - started_at
+                _log(f"Dedup: near signatures rows={index:,} elapsed={elapsed:.1f}s")
 
         with self.conn:
             if signature_rows:
@@ -275,10 +298,11 @@ class WinnerMixin:
                 )
 
         pair_hits = self._near_candidate_pair_hits()
+        _log(f"Dedup: near candidate pairs={len(pair_hits):,}")
         decisions: dict[tuple[str, str], NearDecision] = {}
         union_find = UnionFind()
         candidate_rows = []
-        for (left_id, right_id), bucket_hits_count in sorted(pair_hits.items()):
+        for index, ((left_id, right_id), bucket_hits_count) in enumerate(sorted(pair_hits.items()), start=1):
             left = signature_by_id[left_id]
             right = signature_by_id[right_id]
             decision = detector.decide(left, right)
@@ -298,8 +322,12 @@ class WinnerMixin:
                     None,
                 )
             )
+            if index % 50_000 == 0:
+                elapsed = time.monotonic() - started_at
+                _log(f"Dedup: near decisions pairs={index:,} elapsed={elapsed:.1f}s")
 
         loser_rows = self._near_loser_rows(union_find, row_by_id, decisions)
+        _log(f"Dedup: near losers={len(loser_rows):,}")
         canonical_by_loser = {row[0]: row[1] for row in loser_rows}
         candidate_rows = [
             (*row[:-1], canonical_by_loser.get(row[0]) or canonical_by_loser.get(row[1]))

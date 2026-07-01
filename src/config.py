@@ -26,6 +26,8 @@ PART_SIZE = 200_000  # 每个输出 JSONL 分片的最大行数
 PAYLOAD_PART_BYTES = DEFAULT_PAYLOAD_PART_BYTES  # 每个 payload 分片最大字节数（默认 512MB）
 TARGET_SCALE_ROWS = 20_000_000  # 用于 summary 中 2000 万行存储估算
 WRITE_AUX_OUTPUTS = False  # 默认只写 cleaned 输出；测试/审计需要时可打开辅助输出
+LOG_EVERY_ROWS = 50_000  # 长任务每处理多少行打印一次进度
+LOG_EVERY_SECONDS = 15  # 长任务至少每隔多少秒打印一次进度
 
 # --- 近似去重 ---
 NEAR_DEDUP_ENABLED = True  # 是否启用近似去重自动合并
@@ -67,6 +69,8 @@ class RuntimeConfig:
     payload_part_bytes: int = PAYLOAD_PART_BYTES
     target_scale_rows: int = TARGET_SCALE_ROWS
     write_aux_outputs: bool = WRITE_AUX_OUTPUTS
+    log_every_rows: int = LOG_EVERY_ROWS
+    log_every_seconds: int = LOG_EVERY_SECONDS
 
 
 @dataclass(frozen=True)
