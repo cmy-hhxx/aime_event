@@ -15,9 +15,9 @@ CLEANED_DIR = "/mnt/ainvest_content/v3/v1"  # 审计格式 canonical 输出
 DUPLICATES_DIR = "output/duplicates"  # 重复记录输出（默认不写）
 REJECTS_DIR = "output/rejects"  # 被拒绝的原始行（默认不写）
 EVENT_DIR = "output/event_input"  # 事件抽取输入（默认不写）
-STATE_DIR = "state"  # SQLite 状态库与进度文件
-PAYLOAD_DIR = "state/payloads"  # 二进制 payload 分片
-REPORTS_DIR = "reports"  # 统计报表输出
+STATE_DIR = "/mnt/ainvest_content/v3/v1/state"  # SQLite 状态库与进度文件
+PAYLOAD_DIR = "/mnt/ainvest_content/v3/v1/state/payloads"  # 二进制 payload 分片
+REPORTS_DIR = "/mnt/ainvest_content/v3/v1/reports"  # 统计报表输出
 
 # --- 运行时 ---
 WORKERS = 4  # 并行进程数，建议 ≤ CPU 核数
