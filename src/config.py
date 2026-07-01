@@ -10,11 +10,11 @@ DEFAULT_PAYLOAD_PART_BYTES = 512 * 1024 * 1024
 # ============================================================
 
 # --- 路径 ---
-INPUT_DIR = "data/raw"  # 原始 NDJSON 输入目录（content_batch_*.ndjson）
-CLEANED_DIR = "output/cleaned"  # 审计格式 canonical 输出
-DUPLICATES_DIR = "output/duplicates"  # 重复记录输出
-REJECTS_DIR = "output/rejects"  # 被拒绝的原始行
-EVENT_DIR = "output/event_input"  # 事件抽取输入（精简格式）
+INPUT_DIR = "/mnt/ainvest_content/v1"  # 原始 NDJSON 输入目录
+CLEANED_DIR = "/mnt/ainvest_content/v3/v1"  # 审计格式 canonical 输出
+DUPLICATES_DIR = "output/duplicates"  # 重复记录输出（默认不写）
+REJECTS_DIR = "output/rejects"  # 被拒绝的原始行（默认不写）
+EVENT_DIR = "output/event_input"  # 事件抽取输入（默认不写）
 STATE_DIR = "state"  # SQLite 状态库与进度文件
 PAYLOAD_DIR = "state/payloads"  # 二进制 payload 分片
 REPORTS_DIR = "reports"  # 统计报表输出
@@ -22,9 +22,10 @@ REPORTS_DIR = "reports"  # 统计报表输出
 # --- 运行时 ---
 WORKERS = 4  # 并行进程数，建议 ≤ CPU 核数
 CHUNK_SIZE = 3_000  # 每批送入 transform 的行数，越大内存占用越高
-PART_SIZE = 100_000  # 每个输出 NDJSON 分片的最大行数
+PART_SIZE = 200_000  # 每个输出 JSONL 分片的最大行数
 PAYLOAD_PART_BYTES = DEFAULT_PAYLOAD_PART_BYTES  # 每个 payload 分片最大字节数（默认 512MB）
 TARGET_SCALE_ROWS = 20_000_000  # 用于 summary 中 2000 万行存储估算
+WRITE_AUX_OUTPUTS = False  # 默认只写 cleaned 输出；测试/审计需要时可打开辅助输出
 
 # --- 近似去重 ---
 NEAR_DEDUP_ENABLED = True  # 是否启用近似去重自动合并
@@ -65,6 +66,7 @@ class RuntimeConfig:
     part_size: int = PART_SIZE
     payload_part_bytes: int = PAYLOAD_PART_BYTES
     target_scale_rows: int = TARGET_SCALE_ROWS
+    write_aux_outputs: bool = WRITE_AUX_OUTPUTS
 
 
 @dataclass(frozen=True)
@@ -97,7 +99,7 @@ class PipelineConfig:
     def with_paths(self, **updates: Path) -> PipelineConfig:
         return replace(self, paths=replace(self.paths, **updates))
 
-    def with_runtime(self, **updates: int) -> PipelineConfig:
+    def with_runtime(self, **updates: bool | int) -> PipelineConfig:
         return replace(self, runtime=replace(self.runtime, **updates))
 
     def with_near_duplicates(self, **updates: bool | int | float) -> PipelineConfig:

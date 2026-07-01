@@ -49,6 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--near-threshold", type=positive_float, help="高级覆盖：MinHash Jaccard 阈值")
     parser.add_argument("--near-fuzzy-threshold", type=positive_float, help="高级覆盖：RapidFuzz 正文相似度阈值")
     parser.add_argument("--no-near-dedup", action="store_true", help="关闭近似去重自动合并")
+    parser.add_argument("--write-aux-outputs", action="store_true", help="写出 duplicates/rejects/event_input 辅助文件")
     parser.add_argument("--force", action="store_true", help="强制重跑已完成的 batch")
     parser.add_argument("--export-only", action="store_true", help="兼容别名：等同 export 命令")
     parser.add_argument("--reset-state", action="store_true", help="兼容别名：等同 fresh 命令")
@@ -79,6 +80,8 @@ def config_from_args(args: argparse.Namespace, base: PipelineConfig = DEFAULT_CO
         value = getattr(args, key)
         if value is not None:
             runtime_updates[key] = value
+    if args.write_aux_outputs:
+        runtime_updates["write_aux_outputs"] = True
 
     near_updates = {}
     if args.no_near_dedup:

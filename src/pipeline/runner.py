@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor
@@ -19,7 +20,14 @@ from src.storage import PayloadWriter, RejectRow, StagingDB, StateVersionError
 
 
 def discover_batches(input_dir: Path) -> list[Path]:
-    return sorted(input_dir.glob("content_batch_*.ndjson"))
+    return sorted(input_dir.glob("content_batch_*.ndjson"), key=_batch_sort_key)
+
+
+def _batch_sort_key(path: Path) -> tuple[int, int | str]:
+    match = re.search(r"content_batch_(\d+)\.ndjson$", path.name)
+    if match:
+        return (0, int(match.group(1)))
+    return (1, path.name)
 
 
 def ingest_batches(config: PipelineConfig, db: StagingDB, force: bool) -> None:
@@ -81,17 +89,23 @@ def ingest_batch(
 
 def export_outputs(config: PipelineConfig, db: StagingDB) -> dict[str, int]:
     paths = config.paths
-    part_size = config.runtime.part_size
+    runtime = config.runtime
+    part_size = runtime.part_size
     cleaned_tmp = _tmp_output_dir(paths.cleaned_dir)
-    dup_tmp = _tmp_output_dir(paths.duplicates_dir)
-    reject_tmp = _tmp_output_dir(paths.rejects_dir)
-    event_tmp = _tmp_output_dir(paths.event_dir)
-    writers = [
-        PartWriter(cleaned_tmp, "cleaned", part_size),
-        PartWriter(dup_tmp, "dup", part_size),
-        PartWriter(reject_tmp, "reject", part_size),
-        PartWriter(event_tmp, "event", part_size),
-    ]
+    cleaned_writer = PartWriter(
+        cleaned_tmp,
+        "cleaned",
+        part_size,
+        filename_template="{prefix}_batch{index}.jsonl",
+        start_index=1,
+    )
+    aux_writers = {}
+    if runtime.write_aux_outputs:
+        aux_writers = {
+            "duplicates": PartWriter(_tmp_output_dir(paths.duplicates_dir), "dup", part_size),
+            "rejects": PartWriter(_tmp_output_dir(paths.rejects_dir), "reject", part_size),
+            "event_input": PartWriter(_tmp_output_dir(paths.event_dir), "event", part_size),
+        }
     stats: Counter[str] = Counter()
 
     try:
@@ -107,46 +121,50 @@ def export_outputs(config: PipelineConfig, db: StagingDB) -> dict[str, int]:
                     orjson.loads(row["dedup_debug"]),
                 )
             )
-            writers[0].write(cleaned_record)
-            writers[3].write(build_event_record(cleaned_record))
+            cleaned_writer.write(cleaned_record)
             stats["cleaned"] += 1
-            stats["event_input"] += 1
+            if "event_input" in aux_writers:
+                aux_writers["event_input"].write(build_event_record(cleaned_record))
+                stats["event_input"] += 1
 
-        for row in db.duplicate_rows():
-            record = db.load_record(row)
-            duplicate_record = build_cleaned_record(
-                finalize_record(
-                    record,
-                    str(row["dedup_key"]),
-                    str(row["dedup_method"]),
-                    False,
-                    str(row["canonical_id"]),
-                    orjson.loads(row["dedup_debug"]),
+        if "duplicates" in aux_writers:
+            for row in db.duplicate_rows():
+                record = db.load_record(row)
+                duplicate_record = build_cleaned_record(
+                    finalize_record(
+                        record,
+                        str(row["dedup_key"]),
+                        str(row["dedup_method"]),
+                        False,
+                        str(row["canonical_id"]),
+                        orjson.loads(row["dedup_debug"]),
+                    )
                 )
-            )
-            writers[1].write(duplicate_record)
-            stats["duplicates"] += 1
+                aux_writers["duplicates"].write(duplicate_record)
+                stats["duplicates"] += 1
 
-        for row in db.reject_rows():
-            writers[2].write(
-                {
-                    "batch": row["batch"],
-                    "line_no": row["line_no"],
-                    "raw_id": row["raw_id"],
-                    "reason": row["reason"],
-                    "message": row["message"],
-                    "raw_line": row["raw_line"],
-                }
-            )
-            stats["rejects"] += 1
+        if "rejects" in aux_writers:
+            for row in db.reject_rows():
+                aux_writers["rejects"].write(
+                    {
+                        "batch": row["batch"],
+                        "line_no": row["line_no"],
+                        "raw_id": row["raw_id"],
+                        "reason": row["reason"],
+                        "message": row["message"],
+                        "raw_line": row["raw_line"],
+                    }
+                )
+                stats["rejects"] += 1
     finally:
-        for writer in writers:
+        for writer in [cleaned_writer, *aux_writers.values()]:
             writer.close()
 
     _replace_output_dir(cleaned_tmp, paths.cleaned_dir)
-    _replace_output_dir(dup_tmp, paths.duplicates_dir)
-    _replace_output_dir(reject_tmp, paths.rejects_dir)
-    _replace_output_dir(event_tmp, paths.event_dir)
+    if runtime.write_aux_outputs:
+        _replace_output_dir(paths.duplicates_dir.parent / f".{paths.duplicates_dir.name}.tmp", paths.duplicates_dir)
+        _replace_output_dir(paths.rejects_dir.parent / f".{paths.rejects_dir.name}.tmp", paths.rejects_dir)
+        _replace_output_dir(paths.event_dir.parent / f".{paths.event_dir.name}.tmp", paths.event_dir)
     return dict(stats)
 
 

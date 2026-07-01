@@ -32,6 +32,18 @@ python3 -m venv .venv
 
 CLI 参数（`--workers`、`--no-near-dedup` 等）仅用于测试或一次性覆盖，见 `python -m src.main --help`。
 
+当前挂载目录默认约定：
+
+```text
+/mnt/ainvest_content/v1/content_batch_*.ndjson  # 原始输入，仅扫描这些 batch 文件
+/mnt/ainvest_content/v3/v1/cleaned_batch1.jsonl # 默认输出，20 万行一个分片
+/mnt/ainvest_content/v3/v1/cleaned_batch2.jsonl
+...
+```
+
+默认只写 cleaned 输出；如需同时写出 `duplicates/`、`rejects/`、`event_input/` 辅助文件，运行时加
+`--write-aux-outputs`。
+
 ## 清洗流程
 
 流水线分 **Ingest（写入 state）** 与 **Export（从 state 读出去重 + 写出）** 两阶段。`run` / `fresh` 先 ingest 再 export；`export` 跳过 ingest，直接从已有 `state/` 重导出。

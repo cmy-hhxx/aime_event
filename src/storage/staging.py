@@ -307,14 +307,14 @@ class StagingDB(WinnerMixin):
         return self.conn.execute(
             """SELECT * FROM dedup_winners
                WHERE id NOT IN (SELECT loser_id FROM near_duplicate_losers)
-               ORDER BY published_at DESC, id ASC, batch ASC, line_no ASC"""
+               ORDER BY published_at ASC, id ASC, batch ASC, line_no ASC"""
         )
 
     def duplicate_rows(self) -> Iterable[sqlite3.Row]:
         self.build_winner_tables()
         return self.conn.execute(
             """SELECT * FROM duplicate_records
-               ORDER BY published_at DESC, id ASC, batch ASC, line_no ASC"""
+               ORDER BY published_at ASC, id ASC, batch ASC, line_no ASC"""
         )
 
     def reject_rows(self) -> Iterable[sqlite3.Row]:

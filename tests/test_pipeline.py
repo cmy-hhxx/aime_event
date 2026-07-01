@@ -148,6 +148,7 @@ def _run_pipeline(tmp_path: Path, *extra: str) -> None:
         "2",
         "--part-size",
         "2",
+        "--write-aux-outputs",
         *extra,
     ]
     subprocess.run(cmd, cwd=ROOT, check=True, capture_output=True, text=True)
@@ -155,7 +156,7 @@ def _run_pipeline(tmp_path: Path, *extra: str) -> None:
 
 def _read_parts(directory: Path) -> list[dict]:
     records = []
-    for path in sorted(directory.glob("*.ndjson")):
+    for path in sorted(directory.glob("*.jsonl")):
         for line in path.read_bytes().splitlines():
             records.append(orjson.loads(line))
     return records
@@ -271,3 +272,23 @@ def test_payload_offsets_can_reload_records(tmp_path: Path) -> None:
     assert record["id"] == row["id"]
     assert "record_json" not in columns
     assert {"payload_path", "payload_offset", "payload_length", "payload_sha256"} <= columns
+
+
+def test_exports_are_sorted_by_published_at_ascending_across_parts(tmp_path: Path) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir(parents=True)
+    rows = [
+        orjson.dumps(_raw("late", "Late", "late body", "https://example.com/late", ctime=300)),
+        orjson.dumps(_raw("early", "Early", "early body", "https://example.com/early", ctime=100)),
+        orjson.dumps(_raw("middle", "Middle", "middle body", "https://example.com/middle", ctime=200)),
+    ]
+    (input_dir / "sample.ndjson").write_bytes(b"\n".join(rows) + b"\n")
+
+    _run_pipeline(tmp_path, "--no-near-dedup")
+
+    cleaned = _read_parts(tmp_path / "output" / "cleaned")
+    event_records = _read_parts(tmp_path / "output" / "event_input")
+
+    assert [record["id"] for record in cleaned] == ["early", "middle", "late"]
+    assert [record["id"] for record in event_records] == ["early", "middle", "late"]
+    assert len(list((tmp_path / "output" / "cleaned").glob("*.jsonl"))) == 2
