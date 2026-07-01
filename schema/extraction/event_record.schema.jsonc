@@ -1,0 +1,11 @@
+{
+  // event_record.schema.json 的中文说明文档（非独立 schema）。
+  //
+  // EventRecord 是下游事件概念抽取的精简输入：
+  // - 从 CleanedRecord 投影而来，仅保留抽取所需字段
+  // - topics 由 tags 转换，已去除 us_high/mid/low_importance 与地区标签
+  // - 不含任何去重溯源信息
+  // - 校验文件：schema/extraction/event_record.schema.json
+  // - 输出目录：output/event_input/
+  "$ref": "./event_record.schema.json"
+}

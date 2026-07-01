@@ -6,10 +6,11 @@
 
 | 文件 | 用途 | 校验目录 |
 |------|------|----------|
-| [cleaned_record.schema.json](cleaned_record.schema.json) | 完整审计格式（CleanedRecord） | `output/cleaned/`、`output/duplicates/` |
-| [cleaned_record.schema.jsonc](cleaned_record.schema.jsonc) | CleanedRecord 中文说明 + 去重规则 | — |
-| [event_record.schema.json](event_record.schema.json) | 事件抽取精简格式（EventRecord） | `output/event_input/` |
-| [event_record.schema.jsonc](event_record.schema.jsonc) | EventRecord 中文说明 | — |
+| [cleaning/cleaned_record.schema.json](cleaning/cleaned_record.schema.json) | 完整审计格式（CleanedRecord） | `output/cleaned/`、`output/duplicates/` |
+| [cleaning/cleaned_record.schema.jsonc](cleaning/cleaned_record.schema.jsonc) | CleanedRecord 中文说明 + 去重规则 | — |
+| [extraction/event_record.schema.json](extraction/event_record.schema.json) | 事件抽取精简格式（EventRecord） | `output/event_input/` |
+| [extraction/event_record.schema.jsonc](extraction/event_record.schema.jsonc) | EventRecord 中文说明 | — |
+| [completion/completed_event.schema.json](completion/completed_event.schema.json) | 事件补全输出格式（CompletedEvent） | `output/completed/` |
 
 ### CleanedRecord vs EventRecord
 
@@ -22,9 +23,9 @@
 
 | 文件 | 用途 | 输出路径 |
 |------|------|----------|
-| [summary.schema.json](summary.schema.json) | 全库汇总统计 | `reports/summary.json` |
-| [batch_stats.schema.json](batch_stats.schema.json) | 按 batch 统计（NDJSON 每行） | `reports/batch_stats.jsonl` |
-| [near_duplicates.schema.json](near_duplicates.schema.json) | 近似去重候选对审计 | `reports/near_duplicates.jsonl` |
+| [cleaning/summary.schema.json](cleaning/summary.schema.json) | 全库汇总统计 | `reports/summary.json` |
+| [cleaning/batch_stats.schema.json](cleaning/batch_stats.schema.json) | 按 batch 统计（NDJSON 每行） | `reports/batch_stats.jsonl` |
+| [cleaning/near_duplicates.schema.json](cleaning/near_duplicates.schema.json) | 近似去重候选对审计 | `reports/near_duplicates.jsonl` |
 
 报表字段详解见 [reports/README.md](../reports/README.md)。
 

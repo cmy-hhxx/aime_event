@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from dataclasses import replace
 from pathlib import Path
 
 from src.config import DEFAULT_CONFIG, PipelineConfig
-from src.pipeline import run_pipeline
 
 
 def positive_int(value: str) -> int:
@@ -24,8 +24,33 @@ def positive_float(value: str) -> float:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
+        description="AIME 事件流水线：cleaning / extraction / completion",
+        epilog=(
+            "阶段入口：clean, extract, complete, run-all。"
+            "兼容旧命令：run, fresh, export 仍直接执行 cleaning。"
+        ),
+    )
+    add_cleaning_arguments(parser)
+    return parser
+
+
+def build_clean_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="python -m src.main clean",
         description="清洗 AIME 事件 NDJSON 数据（日常配置请改 src/config.py）",
     )
+    add_cleaning_arguments(parser)
+    return parser
+
+
+def build_stage_parser(stage: str, description: str) -> argparse.ArgumentParser:
+    return argparse.ArgumentParser(
+        prog=f"python -m src.main {stage}",
+        description=description,
+    )
+
+
+def add_cleaning_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "command",
         nargs="?",
@@ -56,7 +81,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--force", action="store_true", help="强制重跑已完成的 batch")
     parser.add_argument("--export-only", action="store_true", help="兼容别名：等同 export 命令")
     parser.add_argument("--reset-state", action="store_true", help="兼容别名：等同 fresh 命令")
-    return parser
 
 
 def config_from_args(args: argparse.Namespace, base: PipelineConfig = DEFAULT_CONFIG) -> PipelineConfig:
@@ -113,8 +137,9 @@ def config_from_args(args: argparse.Namespace, base: PipelineConfig = DEFAULT_CO
     return config
 
 
-def main() -> None:
-    args = build_parser().parse_args()
+def run_cleaning_from_args(args: argparse.Namespace) -> None:
+    from src.cleaning.pipeline import run_pipeline
+
     command = args.command
     run_pipeline(
         config_from_args(args),
@@ -122,6 +147,42 @@ def main() -> None:
         export_only=args.export_only or command == "export",
         force=args.force,
     )
+
+
+def main(argv: list[str] | None = None) -> None:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    stage = argv[0] if argv else None
+
+    if stage == "clean":
+        args = build_clean_parser().parse_args(argv[1:])
+        run_cleaning_from_args(args)
+        return
+    if stage == "extract":
+        build_stage_parser("extract", "事件抽取阶段入口（当前为占位实现）").parse_args(argv[1:])
+
+        from src.extraction.pipeline import run_pipeline as run_extraction_pipeline
+
+        run_extraction_pipeline()
+        return
+    if stage == "complete":
+        build_stage_parser("complete", "事件补全阶段入口（当前为占位实现）").parse_args(argv[1:])
+
+        from src.completion.pipeline import run_pipeline as run_completion_pipeline
+
+        run_completion_pipeline()
+        return
+    if stage == "run-all":
+        from src.completion.pipeline import run_pipeline as run_completion_pipeline
+        from src.extraction.pipeline import run_pipeline as run_extraction_pipeline
+
+        args = build_clean_parser().parse_args(argv[1:])
+        run_cleaning_from_args(args)
+        run_extraction_pipeline()
+        run_completion_pipeline()
+        return
+
+    args = build_parser().parse_args(argv)
+    run_cleaning_from_args(args)
 
 
 if __name__ == "__main__":
