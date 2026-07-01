@@ -61,6 +61,10 @@ class StagingDB(WinnerMixin):
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA synchronous=NORMAL")
+        self.conn.execute("PRAGMA temp_store=MEMORY")
+        self.conn.execute("PRAGMA cache_size=-262144")
+        self.conn.execute("PRAGMA mmap_size=268435456")
+        self.conn.execute("PRAGMA busy_timeout=60000")
         self._ensure_schema()
 
     def _delete_db_files(self) -> None:
@@ -197,6 +201,10 @@ class StagingDB(WinnerMixin):
         self.conn.commit()
 
     def close(self) -> None:
+        try:
+            self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        except sqlite3.Error:
+            pass
         self.conn.close()
 
     def is_batch_complete(self, batch: str) -> bool:

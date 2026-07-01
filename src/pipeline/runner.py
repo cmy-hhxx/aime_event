@@ -230,6 +230,33 @@ def export_outputs(config: PipelineConfig, db: StagingDB) -> dict[str, int]:
     return dict(stats)
 
 
+def save_final_state(paths) -> None:
+    source = paths.state_dir
+    target = paths.final_state_dir
+    if source.resolve() == target.resolve():
+        log(f"State: final state already at {target}")
+        return
+    if not source.exists():
+        log(f"State: no local state directory found at {source}")
+        return
+
+    tmp_target = target.parent / f".{target.name}.tmp"
+    backup = target.parent / f".{target.name}.bak"
+    log(f"State: saving local state {source} -> {target}")
+    if tmp_target.exists():
+        shutil.rmtree(tmp_target)
+    if backup.exists():
+        shutil.rmtree(backup)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(source, tmp_target)
+    if target.exists():
+        target.rename(backup)
+    tmp_target.rename(target)
+    if backup.exists():
+        shutil.rmtree(backup)
+    log(f"State: saved final state to {target}")
+
+
 def run_pipeline(
     config: PipelineConfig,
     *,
@@ -264,6 +291,7 @@ def run_pipeline(
         summary = write_reports(db, config)
     finally:
         db.close()
+    save_final_state(paths)
 
     log(f"Exported: {json.dumps(export_stats, sort_keys=True)}")
     near_merged = summary.get("near_duplicates_auto_merged", 0)

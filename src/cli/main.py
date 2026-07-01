@@ -40,6 +40,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--event-output", help="高级覆盖：event_input 输出目录")
     parser.add_argument("--state", help="高级覆盖：state 目录")
     parser.add_argument("--payload-dir", help="高级覆盖：payload 目录")
+    parser.add_argument("--final-state-dir", help="高级覆盖：最终保存 state 的目录")
     parser.add_argument("--reports", help="高级覆盖：reports 目录")
     parser.add_argument("--workers", type=positive_int, help="高级覆盖：并行进程数")
     parser.add_argument("--chunk-size", type=positive_int, help="高级覆盖：transform 分块行数")
@@ -74,6 +75,8 @@ def config_from_args(args: argparse.Namespace, base: PipelineConfig = DEFAULT_CO
         path_updates["state_dir"] = Path(args.state)
     if args.payload_dir:
         path_updates["payload_dir"] = Path(args.payload_dir)
+    if args.final_state_dir:
+        path_updates["final_state_dir"] = Path(args.final_state_dir)
     if args.reports:
         path_updates["reports_dir"] = Path(args.reports)
 

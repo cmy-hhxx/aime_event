@@ -15,13 +15,14 @@ CLEANED_DIR = "/mnt/ainvest_content/v3/v1"  # 审计格式 canonical 输出
 DUPLICATES_DIR = "output/duplicates"  # 重复记录输出（默认不写）
 REJECTS_DIR = "output/rejects"  # 被拒绝的原始行（默认不写）
 EVENT_DIR = "output/event_input"  # 事件抽取输入（默认不写）
-STATE_DIR = "/mnt/ainvest_content/v3/v1/state"  # SQLite 状态库与进度文件
-PAYLOAD_DIR = "/mnt/ainvest_content/v3/v1/state/payloads"  # 二进制 payload 分片
+STATE_DIR = "/tmp/aime_event/v1/state"  # 运行中 SQLite 状态库，放本地盘减少 Ceph 随机 IO
+PAYLOAD_DIR = "/tmp/aime_event/v1/state/payloads"  # 运行中 payload 分片，放本地盘减少 Ceph 随机 IO
+FINAL_STATE_DIR = "/mnt/ainvest_content/v3/v1/state"  # 运行结束后保存的最终 state
 REPORTS_DIR = "/mnt/ainvest_content/v3/v1/reports"  # 统计报表输出
 
 # --- 运行时 ---
 WORKERS = 4  # 并行进程数，建议 ≤ CPU 核数
-CHUNK_SIZE = 3_000  # 每批送入 transform 的行数，越大内存占用越高
+CHUNK_SIZE = 20_000  # 每批送入 transform 的行数，越大内存占用越高
 PART_SIZE = 200_000  # 每个输出 JSONL 分片的最大行数
 PAYLOAD_PART_BYTES = DEFAULT_PAYLOAD_PART_BYTES  # 每个 payload 分片最大字节数（默认 512MB）
 TARGET_SCALE_ROWS = 20_000_000  # 用于 summary 中 2000 万行存储估算
@@ -58,6 +59,7 @@ class PathsConfig:
     event_dir: Path = field(default_factory=lambda: Path(EVENT_DIR))
     state_dir: Path = field(default_factory=lambda: Path(STATE_DIR))
     payload_dir: Path = field(default_factory=lambda: Path(PAYLOAD_DIR))
+    final_state_dir: Path = field(default_factory=lambda: Path(FINAL_STATE_DIR))
     reports_dir: Path = field(default_factory=lambda: Path(REPORTS_DIR))
 
 
