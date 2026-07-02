@@ -6,6 +6,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from src.config import DEFAULT_CONFIG, PipelineConfig
+from src.extraction.models import ExtractionSettings
 
 
 def positive_int(value: str) -> int:
@@ -48,6 +49,25 @@ def build_stage_parser(stage: str, description: str) -> argparse.ArgumentParser:
         prog=f"python -m src.main {stage}",
         description=description,
     )
+
+
+def build_extract_parser() -> argparse.ArgumentParser:
+    parser = build_stage_parser("extract", "事件抽取阶段：读取 cleaned_batch*.jsonl，调用 LLM API 输出 event_batch*.jsonl")
+    parser.add_argument("--input", default="/mnt/ainvest_content/v3/v1", help="cleaned 输入目录或单个 JSONL 文件")
+    parser.add_argument("--output", default="/mnt/ainvest_content/v3/v1/extracted", help="事件抽取输出目录")
+    parser.add_argument("--env-file", default=".env", help="API 配置文件")
+    parser.add_argument("--base-url", help="OpenAI-compatible base URL，通常以 /v1 结尾")
+    parser.add_argument("--api-key", help="API key；也可写入 .env")
+    parser.add_argument("--model", help="抽取模型名；也可写入 .env")
+    parser.add_argument("--limit", type=positive_int, help="最多处理多少条，便于小样本试跑")
+    parser.add_argument("--timeout-seconds", type=positive_int, default=120, help="单次 API 请求超时")
+    parser.add_argument("--max-retries", type=int, default=2, help="单条记录失败后的重试次数")
+    parser.add_argument("--log-every-rows", type=positive_int, default=100, help="每处理多少条打印一次进度")
+    parser.add_argument("--max-body-chars", type=positive_int, default=8000, help="送入模型的正文最大字符数")
+    parser.add_argument("--temperature", type=float, default=0.0, help="模型 temperature")
+    parser.add_argument("--max-tokens", type=positive_int, default=1200, help="模型最大输出 token")
+    parser.add_argument("--include-raw-response", action="store_true", help="在输出中保留模型原始 JSON 响应")
+    return parser
 
 
 def add_cleaning_arguments(parser: argparse.ArgumentParser) -> None:
@@ -149,6 +169,25 @@ def run_cleaning_from_args(args: argparse.Namespace) -> None:
     )
 
 
+def extraction_settings_from_args(args: argparse.Namespace) -> ExtractionSettings:
+    return ExtractionSettings(
+        input_path=Path(args.input),
+        output_dir=Path(args.output),
+        env_file=Path(args.env_file),
+        base_url=args.base_url,
+        api_key=args.api_key,
+        model=args.model,
+        limit=args.limit,
+        timeout_seconds=args.timeout_seconds,
+        max_retries=args.max_retries,
+        log_every_rows=args.log_every_rows,
+        max_body_chars=args.max_body_chars,
+        temperature=args.temperature,
+        max_tokens=args.max_tokens,
+        include_raw_response=args.include_raw_response,
+    )
+
+
 def main(argv: list[str] | None = None) -> None:
     argv = list(sys.argv[1:] if argv is None else argv)
     stage = argv[0] if argv else None
@@ -158,11 +197,11 @@ def main(argv: list[str] | None = None) -> None:
         run_cleaning_from_args(args)
         return
     if stage == "extract":
-        build_stage_parser("extract", "事件抽取阶段入口（当前为占位实现）").parse_args(argv[1:])
+        args = build_extract_parser().parse_args(argv[1:])
 
         from src.extraction.pipeline import run_pipeline as run_extraction_pipeline
 
-        run_extraction_pipeline()
+        run_extraction_pipeline(extraction_settings_from_args(args))
         return
     if stage == "complete":
         build_stage_parser("complete", "事件补全阶段入口（当前为占位实现）").parse_args(argv[1:])

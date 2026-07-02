@@ -4,8 +4,8 @@
 
 ## 当前状态
 
-该阶段目前只有目录和 CLI 入口占位，尚未接入具体抽取逻辑。直接运行
-`python -m src.main extract` 会返回未实现提示。
+该阶段使用 OpenAI-compatible chat completions API 做 prompt 抽取。先填写仓库根目录下
+`.env`，再用小样本试跑。
 
 ## 预期输入输出
 
@@ -15,8 +15,19 @@
 Schema：schema/extraction/event_record.schema.json
 ```
 
-## 后续实现点
+## 运行
 
-- 定义事件类型、事件主体、时间、标的、证据句等字段。
-- 明确抽取模型或规则入口。
-- 保持输出 JSONL 分片，便于和 cleaning/completion 串联。
+```bash
+python -m src.main extract --limit 20
+```
+
+常用参数：
+
+- `--input`：cleaned 输入目录或单个 JSONL 文件。
+- `--output`：抽取输出目录。
+- `--model` / `--base-url` / `--api-key`：覆盖 `.env` 中的 API 配置。
+- `--limit`：最多处理多少条，建议先用 20 或 100 验证 prompt。
+- `--include-raw-response`：调 prompt 时保留模型原始 JSON 响应。
+
+输出每行对应一条 cleaned 输入，`events` 数组中保存 0 到多个事件；失败记录会保留
+`error` 和 `message`，便于重跑前排查。
