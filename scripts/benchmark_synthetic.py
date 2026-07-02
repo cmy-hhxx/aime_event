@@ -11,7 +11,7 @@ from pathlib import Path
 import orjson
 
 
-from src.storage import directory_size
+from src.cleaning.storage import directory_size
 
 
 def _record(index: int, duplicate_every: int, near_every: int) -> dict:

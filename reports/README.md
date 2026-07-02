@@ -23,7 +23,7 @@
 | `near_duplicates_report_only` | 仅记录、未合并的对数 |
 | `storage` | 各目录字节数，含 `estimated_20m_rows_bytes`（按当前行均大小估算 2000 万行存储） |
 
-Schema：[schema/summary.schema.json](../schema/summary.schema.json)
+Schema：[schema/cleaning/summary.schema.json](../schema/cleaning/summary.schema.json)
 
 ## batch_stats.jsonl
 
@@ -33,7 +33,7 @@ Schema：[schema/summary.schema.json](../schema/summary.schema.json)
 - `status`：`running` 或 `complete`
 - `input` / `accepted` / `rejected`：行数统计
 
-Schema：[schema/batch_stats.schema.json](../schema/batch_stats.schema.json)
+Schema：[schema/cleaning/batch_stats.schema.json](../schema/cleaning/batch_stats.schema.json)
 
 ## near_duplicates.jsonl
 
@@ -47,7 +47,7 @@ Schema：[schema/batch_stats.schema.json](../schema/batch_stats.schema.json)
 | `scores` | `minhash_jaccard`、`fuzzy_score`、`title_score` |
 | `canonical_id` | 合并后保留的记录 ID；`report_only` 时为 null |
 
-Schema：[schema/near_duplicates.schema.json](../schema/near_duplicates.schema.json)
+Schema：[schema/cleaning/near_duplicates.schema.json](../schema/cleaning/near_duplicates.schema.json)
 
 ## 相关文件
 

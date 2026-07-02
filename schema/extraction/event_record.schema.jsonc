@@ -1,0 +1,12 @@
+{
+  // event_record.schema.json 的中文说明文档（非独立 schema）。
+  //
+  // EventRecord 是 LLM 抽取后的事件输出：
+  // - 一行对应一条 cleaned 输入记录
+  // - source_id/source_file/source_line 保留回溯信息
+  // - events 数组保存 0 到多个事件
+  // - error/message 用于记录单条抽取失败
+  // - 校验文件：schema/extraction/event_record.schema.json
+  // - 默认输出目录：/mnt/ainvest_content/v3/v1/extracted/
+  "$ref": "./event_record.schema.json"
+}
