@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from typing import Any
 
 
@@ -32,18 +33,18 @@ SYSTEM_PROMPT = """你是金融资讯事件抽取器。请只返回 JSON 对象�
 
 def build_user_prompt(record: dict[str, Any], *, max_body_chars: int) -> str:
     payload = {
-        "id": record.get("id"),
-        "content_type": record.get("content_type"),
-        "published_at": record.get("published_at"),
+        "id": _first(record, "id", "_id", "bizId"),
+        "content_type": _first(record, "content_type", "businessCode"),
+        "published_at": _published_at(record),
         "title": record.get("title"),
-        "summary": record.get("summary"),
-        "body": _truncate_text(record.get("body"), max_body_chars),
+        "summary": _first(record, "summary"),
+        "body": _truncate_text(_first(record, "body", "content"), max_body_chars),
         "source": record.get("source"),
-        "entities": record.get("entities"),
-        "tags": record.get("tags"),
+        "entities": _first(record, "entities", "innerStockInfo", "links"),
+        "tags": _first(record, "tags", "contentTagMap", "tagInfo"),
         "importance": record.get("importance"),
         "regions": record.get("regions"),
-        "notice": record.get("notice"),
+        "notice": _first(record, "notice", "noticeInfo"),
     }
     compact = {key: value for key, value in payload.items() if value not in (None, "", [], {})}
     return json.dumps(compact, ensure_ascii=False, indent=2)
@@ -56,3 +57,23 @@ def _truncate_text(value: Any, max_chars: int) -> str | None:
     if len(text) <= max_chars:
         return text
     return text[:max_chars] + "\n...[TRUNCATED]"
+
+
+def _first(record: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        value = record.get(key)
+        if value not in (None, "", [], {}):
+            return value
+    return None
+
+
+def _published_at(record: dict[str, Any]) -> str | None:
+    value = _first(record, "published_at", "ctime")
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return datetime.fromtimestamp(value, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+    text = str(value).strip()
+    if text.isdigit():
+        return datetime.fromtimestamp(int(text), tz=timezone.utc).isoformat().replace("+00:00", "Z")
+    return text

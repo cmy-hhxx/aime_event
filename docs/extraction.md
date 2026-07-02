@@ -21,12 +21,23 @@ Schema：schema/extraction/event_record.schema.json
 python -m src.main extract --limit 20
 ```
 
+调 prompt 时如果前几条 cleaned 样本事件密度太低，可以直接从 raw batch 随机抽样：
+
+```bash
+python -m src.main extract \
+  --input /mnt/ainvest_content/v1/content_batch_1.ndjson \
+  --random-sample \
+  --limit 20
+```
+
 常用参数：
 
 - `--input`：cleaned 输入目录或单个 JSONL 文件。
 - `--output`：抽取输出目录。
 - `--model` / `--base-url` / `--api-key`：覆盖 `.env` 中的 API 配置。
 - `--limit`：最多处理多少条，建议先用 20 或 100 验证 prompt。
+- `--random-sample`：从输入 JSONL/NDJSON 中随机抽样，需配合 `--limit`。
+- `--random-seed`：固定抽样种子，便于复现同一批样本。
 - `--include-raw-response`：调 prompt 时保留模型原始 JSON 响应。
 
 输出每行对应一条 cleaned 输入，`events` 数组中保存 0 到多个事件；失败记录会保留

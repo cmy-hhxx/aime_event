@@ -7,6 +7,7 @@ import orjson
 from src.extraction.client import parse_json_object
 from src.extraction.models import ExtractionSettings
 from src.extraction.pipeline import discover_cleaned_files, run_pipeline
+from src.extraction.prompt import build_user_prompt
 
 
 class FakeClient:
@@ -68,3 +69,54 @@ def test_run_pipeline_with_fake_client(tmp_path: Path) -> None:
     payload = orjson.loads(lines[0])
     assert payload["source_id"] == "r1"
     assert payload["events"][0]["event_type"] == "product"
+
+
+def test_random_sample_supports_raw_content_batch(tmp_path: Path) -> None:
+    input_file = tmp_path / "content_batch_1.ndjson"
+    rows = []
+    for index in range(10):
+        rows.append(
+            {
+                "_id": f"raw-{index}",
+                "businessCode": "US_NEWS",
+                "title": f"Apple item {index}",
+                "content": "Apple launched a new device.",
+                "ctime": 1767225600 + index,
+            }
+        )
+    input_file.write_bytes(b"\n".join(orjson.dumps(row) for row in rows) + b"\n")
+
+    output_dir = tmp_path / "output"
+    stats = run_pipeline(
+        ExtractionSettings(
+            input_path=input_file,
+            output_dir=output_dir,
+            limit=3,
+            random_sample=True,
+            random_seed=7,
+        ),
+        client=FakeClient(),
+    )
+
+    assert stats == {"input": 3, "events": 3, "errors": 0}
+    payloads = [orjson.loads(line) for line in (output_dir / "event_batch1.jsonl").read_bytes().splitlines()]
+    assert len(payloads) == 3
+    assert all(payload["source_id"].startswith("raw-") for payload in payloads)
+    assert all(payload["published_at"].endswith("Z") for payload in payloads)
+
+
+def test_prompt_maps_raw_fields() -> None:
+    prompt = build_user_prompt(
+        {
+            "_id": "raw-1",
+            "businessCode": "US_NEWS",
+            "title": "Apple item",
+            "content": "Apple launched a new device.",
+            "ctime": 1767225600,
+        },
+        max_body_chars=200,
+    )
+
+    assert '"id": "raw-1"' in prompt
+    assert '"content_type": "US_NEWS"' in prompt
+    assert '"published_at": "2026-01-01T00:00:00Z"' in prompt

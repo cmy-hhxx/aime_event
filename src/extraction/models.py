@@ -33,3 +33,5 @@ class ExtractionSettings:
     temperature: float = 0.0
     max_tokens: int = 1200
     include_raw_response: bool = False
+    random_sample: bool = False
+    random_seed: int | None = None

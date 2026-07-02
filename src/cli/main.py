@@ -67,6 +67,8 @@ def build_extract_parser() -> argparse.ArgumentParser:
     parser.add_argument("--temperature", type=float, default=0.0, help="模型 temperature")
     parser.add_argument("--max-tokens", type=positive_int, default=1200, help="模型最大输出 token")
     parser.add_argument("--include-raw-response", action="store_true", help="在输出中保留模型原始 JSON 响应")
+    parser.add_argument("--random-sample", action="store_true", help="从输入 JSONL/NDJSON 中随机抽样，需配合 --limit")
+    parser.add_argument("--random-seed", type=int, help="随机抽样种子；不填则每次随机")
     return parser
 
 
@@ -185,6 +187,8 @@ def extraction_settings_from_args(args: argparse.Namespace) -> ExtractionSetting
         temperature=args.temperature,
         max_tokens=args.max_tokens,
         include_raw_response=args.include_raw_response,
+        random_sample=args.random_sample,
+        random_seed=args.random_seed,
     )
 
 
