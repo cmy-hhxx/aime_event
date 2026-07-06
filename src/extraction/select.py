@@ -139,8 +139,12 @@ def run(args) -> None:
         return
     cands = build_candidates(con, config.EVENT_RECENT_MIN_ARTICLES,
                              config.EVENT_RECENT_ALT_MIN_ARTICLES, config.EVENT_EARLY_MIN_ARTICLES)
+    total_cands = len(cands)
+    if getattr(args, "limit", 0):
+        cands = cands[: args.limit]
     n_recent = sum(1 for c in cands if c["is_recent"])
-    print(f"[select] 送审候选 {len(cands)} (recent {n_recent}, early {len(cands)-n_recent})", flush=True)
+    limit_note = f" limit={args.limit}/{total_cands}" if getattr(args, "limit", 0) else ""
+    print(f"[select] 送审候选 {len(cands)} (recent {n_recent}, early {len(cands)-n_recent}){limit_note}", flush=True)
     if args.dry_run:
         return
     titles = fetch_rep_titles(con, [c["event_id"] for c in cands])

@@ -35,7 +35,7 @@ grep -c OPENAI .env   # 应 >= 4
 新容器最多试探到 10：用 `grep read_bytes /proc/<pid>/io` 隔几秒看两次，数字在涨才健康。
 其余阶段读的是小 parquet，并发不受此限制。
 
-## 1. extract index（建索引，IO 重，1~2 小时）
+## 1. extract index（建索引，IO 重）
 
 ```bash
 nohup .venv/bin/python -m src.main extract index --fresh \
@@ -47,7 +47,7 @@ tail -f /mnt/ainvest_content/v3/event_dataset/reports/index.log
 - 之后默认断点续跑（按输出文件跳过；写入原子，中途杀掉无半截文件）
 - 完成标志：日志末行 `{"elapsed_sec": ..., "v1_rows": ...}`，预期 v1_rows≈2460万、failed 空
 
-## 2. extract cluster（聚类，CPU 重，20~60 分钟）
+## 2. extract cluster（聚类，CPU 重）
 
 ```bash
 nohup .venv/bin/python -m src.main extract cluster --workers 32 \

@@ -162,6 +162,7 @@ def build_event_parser(stage: str) -> argparse.ArgumentParser:
         p = sub.add_parser("select", help="阈值筛选(--sweep 看阈值表)")
         p.add_argument("--sweep", action="store_true")
         p.add_argument("--dry-run", action="store_true")
+        p.add_argument("--limit", type=int, default=0, help="只送审前 N 个候选，用于小样本冒烟")
         p.add_argument("--triage-workers", type=positive_int, default=24)
         p = sub.add_parser("structure", help="LLM 结构化(先 --limit 5 验收)")
         p.add_argument("--workers", type=positive_int, default=24)
