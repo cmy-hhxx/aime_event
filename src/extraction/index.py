@@ -1,8 +1,8 @@
 """Stage A: 全量扫描 v1(新闻) + v2(研报段落), 产出 parquet 轻量索引.
 
 用法(服务器上):
-    python -m src.stage_a_index            # 全量
-    python -m src.stage_a_index --limit 2  # 每个目录只跑2个文件,冒烟测试
+    python -m src.main extract index          # 全量
+    python -m src.main extract index --limit 2  # 每个目录只跑2个文件,冒烟测试
 
 输出:
     index/v1_<batch>.parquet       v1 记录级索引(含文件字节偏移,后续可 seek 取正文)

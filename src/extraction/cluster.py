@@ -7,7 +7,7 @@
   4. 跨桶合并共享成员的簇(同一事件在 NVDA 桶和 TSM 桶各聚出一簇的碎片问题)
   5. join v2 研报/电话会计数作为佐证信号
 
-用法: python -m src.stage_b_candidates [--workers 32]
+用法: python -m src.main extract cluster [--workers 32]
 输出: candidates/clusters.parquet, candidates/members.parquet, reports/stage_b_summary.json
 """
 from __future__ import annotations
