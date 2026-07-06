@@ -1,1 +1,1 @@
-"""Event completion stage."""
+"""事件补全: fetch -> label -> assemble."""

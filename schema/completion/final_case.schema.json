@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FinancialPredictionTrainingCaseV4",
+  "description": "complete assemble 产物 final/<CASE_ID>.json 关键字段校验(增强层允许留空占位)。",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema", "case_id", "case_title", "year", "event_family", "main_event",
+               "time_dimension_calibration", "target_relation_evidence", "market_data",
+               "supervised_targets_hidden_labels", "quality_audit"],
+  "properties": {
+    "schema": {"const": "FinancialPredictionTrainingCase.v4.three_year_event_signal_pack"},
+    "case_id": {"type": "string", "pattern": "^[A-Z0-9][A-Z0-9_]{5,90}$"},
+    "year": {"type": "integer", "minimum": 2000},
+    "main_event": {
+      "type": "object",
+      "required": ["event_id", "event_date", "event_type", "facts_publicly_reported",
+                   "event_influence_channels"],
+      "properties": {
+        "event_date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+        "facts_publicly_reported": {"type": "array", "minItems": 2},
+        "event_influence_channels": {"type": "array", "minItems": 2}
+      }
+    },
+    "target_relation_evidence": {
+      "type": "object",
+      "properties": {"rows": {"type": "array", "minItems": 5}}
+    },
+    "supervised_targets_hidden_labels": {
+      "type": "object",
+      "properties": {"labels": {"type": "array", "minItems": 3}}
+    }
+  }
+}
