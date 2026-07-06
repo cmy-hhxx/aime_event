@@ -188,7 +188,8 @@ def run_extract(args: argparse.Namespace) -> None:
              "select": select.run, "structure": structure.run}
     if args.step == "all":
         import argparse as ap
-        index.run(ap.Namespace(workers=None, limit=0, fresh=False))
+        # ceph-fuse 红线: index 并发必须走 config 缺省, 不能落到 cpu_count
+        index.run(ap.Namespace(workers=config.EVENT_INDEX_WORKERS, limit=0, fresh=False))
         cluster.run(ap.Namespace(workers=32, shards=96))
         select.run(ap.Namespace(sweep=False, dry_run=False, triage_workers=24))
         structure.run(ap.Namespace(workers=24, limit=0))
