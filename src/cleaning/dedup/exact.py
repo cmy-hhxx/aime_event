@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import html
 import re
 from dataclasses import dataclass
 from typing import Any, Iterator
@@ -10,6 +11,16 @@ DEDUP_VERSION = 4
 
 _WHITESPACE_RE = re.compile(r"\s+")
 _SEC_ACCESSION_RE = re.compile(r"/archives/edgar/data/\d+/([^/]+)/", re.IGNORECASE)
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+_MARKDOWN_LINK_RE = re.compile(r"\[([^\]]+)\]\([^)]+\)")
+_URL_RE = re.compile(r"https?://\S+|www\.\S+", re.IGNORECASE)
+_DATA_CODE_RE = re.compile(r"data-code=[\"']?([A-Za-z0-9.\-]{1,12})", re.IGNORECASE)
+_STOCK_PATH_RE = re.compile(r"/stocks/(?:[A-Z]+-)?([A-Z0-9.\-]{1,12})", re.IGNORECASE)
+_CASHTAG_RE = re.compile(r"(?<![A-Za-z0-9_])\$([A-Z][A-Z0-9.\-]{0,11})(?![A-Za-z0-9_])")
+_PAREN_TICKER_RE = re.compile(r"\(([A-Z][A-Z0-9.\-]{0,11})\)")
+_NON_TEXT_RE = re.compile(r"[^a-z0-9$%.\-]+")
+_POST_MIN_NORMALIZED_CHARS = 32
+_POST_MIN_TOKENS = 5
 _DENYLIST_PATH_FRAGMENTS = (
     "/arc/outboundfeeds/",
     "/lineup-next/api/",
@@ -33,6 +44,16 @@ _TRACKING_QUERY_KEYS = {
     "utm_source",
     "utm_term",
 }
+_ROBOT_SIGNAL_PATTERNS = (
+    ("rsi_overbought", re.compile(r"\brsi\b.*\boverbought\b|\boverbought\b.*\brsi\b", re.IGNORECASE)),
+    ("rsi_oversold", re.compile(r"\brsi\b.*\boversold\b|\boversold\b.*\brsi\b", re.IGNORECASE)),
+    ("bollinger_up", re.compile(r"bollinger bands? expanding upward", re.IGNORECASE)),
+    ("bollinger_down", re.compile(r"bollinger bands? expanding downward", re.IGNORECASE)),
+    ("bullish", re.compile(r"\bbullish(?:ness| trend| momentum)?\b", re.IGNORECASE)),
+    ("bearish", re.compile(r"\bbearish(?:ness| trend)?\b", re.IGNORECASE)),
+    ("overbought", re.compile(r"\boverbought\b", re.IGNORECASE)),
+    ("oversold", re.compile(r"\boversold\b", re.IGNORECASE)),
+)
 
 
 @dataclass(frozen=True)
@@ -114,6 +135,11 @@ def content_hash(title: str | None, body: str | None) -> str | None:
     return f"hash:sha256:{digest}"
 
 
+def _hash_key(prefix: str, value: str) -> str:
+    digest = hashlib.sha256(value.encode()).hexdigest()
+    return f"{prefix}:sha256:{digest}"
+
+
 def id_key(record_id: str) -> str:
     return f"id:{record_id}"
 
@@ -171,6 +197,218 @@ def _extract_sec_accession(url: str) -> str | None:
     return match.group(1) if match else None
 
 
+def _symbol_values(record: dict[str, Any], *texts: str) -> list[str]:
+    symbols: set[str] = set()
+    entities = record.get("entities")
+    stocks = entities.get("stocks") if isinstance(entities, dict) else None
+    if isinstance(stocks, list):
+        for stock in stocks:
+            if not isinstance(stock, dict):
+                continue
+            symbol = _normalize_symbol(stock.get("symbol"))
+            if symbol:
+                symbols.add(symbol)
+
+    joined = " ".join(texts)
+    for pattern in (_DATA_CODE_RE, _STOCK_PATH_RE, _CASHTAG_RE, _PAREN_TICKER_RE):
+        for match in pattern.finditer(joined):
+            symbol = _normalize_symbol(match.group(1))
+            if symbol:
+                symbols.add(symbol)
+    return sorted(symbols)[:12]
+
+
+def _normalize_symbol(value: Any) -> str | None:
+    if not value:
+        return None
+    symbol = str(value).upper().strip().strip(".,;:()[]{}")
+    if not re.fullmatch(r"[A-Z][A-Z0-9.\-]{0,11}", symbol):
+        return None
+    return symbol
+
+
+def _plain_market_text(value: str | None) -> str:
+    if not value:
+        return ""
+    text = html.unescape(str(value))
+    text = _MARKDOWN_LINK_RE.sub(r" \1 ", text)
+    text = _DATA_CODE_RE.sub(r" data-code \1 ", text)
+    text = _HTML_TAG_RE.sub(" ", text)
+    text = _URL_RE.sub(" ", text)
+    text = _CASHTAG_RE.sub(r" \1 ", text)
+    text = _NON_TEXT_RE.sub(" ", text.lower())
+    return _WHITESPACE_RE.sub(" ", text).strip()
+
+
+def _published_day(record: dict[str, Any]) -> str:
+    published_at = str(record.get("published_at") or "")
+    return published_at[:10] if len(published_at) >= 10 else ""
+
+
+def _post_fingerprint_key(record: dict[str, Any]) -> DedupResult | None:
+    if record.get("content_type") != "US_POST":
+        return None
+
+    title = str(record.get("title") or "")
+    body = str(record.get("body") or "")
+    normalized_body = _plain_market_text(body)
+    tokens = normalized_body.split()
+    if len(normalized_body) < _POST_MIN_NORMALIZED_CHARS or len(tokens) < _POST_MIN_TOKENS:
+        return None
+
+    symbols = _symbol_values(record, title, body)
+    symbol_scope = ",".join(symbols) if symbols else "none"
+    key_material = f"symbols={symbol_scope}|body={normalized_body}"
+    return DedupResult(
+        key=_hash_key("post_fingerprint", key_material),
+        method="post_fingerprint",
+        debug={
+            "version": DEDUP_VERSION,
+            "source": "us_post_normalized_body",
+            "symbols": symbols,
+            "normalized_chars": len(normalized_body),
+            "normalized_tokens": len(tokens),
+            "text_normalization": "html_markdown_url_cashtag_strip_lower",
+        },
+    )
+
+
+def _robot_template_key(record: dict[str, Any]) -> DedupResult | None:
+    if record.get("content_type") != "US_ROBOT":
+        return None
+
+    title = str(record.get("title") or "")
+    body = str(record.get("body") or "")
+    text = f"{title}\n{body}"
+    normalized = _plain_market_text(text)
+    symbols = _symbol_values(record, title, body)
+    primary_symbol = symbols[0] if symbols else None
+
+    financial = _financial_result_template_key(record, title, normalized, primary_symbol)
+    if financial:
+        return financial
+
+    technical = _technical_signal_template_key(record, title, normalized, primary_symbol)
+    if technical:
+        return technical
+
+    insider = _insider_template_key(record, title, normalized, primary_symbol)
+    if insider:
+        return insider
+
+    return None
+
+
+def _financial_result_template_key(
+    record: dict[str, Any],
+    title: str,
+    normalized: str,
+    symbol: str | None,
+) -> DedupResult | None:
+    if not symbol:
+        return None
+    if not (
+        "financial results" in normalized
+        or (" revenue " in f" {normalized} " and " net income " in f" {normalized} ")
+        or re.search(r"\bq[1-4]\b.*\bearnings\b|\bearnings\b.*\bq[1-4]\b", normalized)
+    ):
+        return None
+
+    year_match = re.search(r"\b(20\d{2})\b", normalized)
+    period_match = re.search(
+        r"\b(q[1-4]|first quarter|second quarter|third quarter|fourth quarter|half[- ]year|full year|annual)\b",
+        normalized,
+    )
+    year = year_match.group(1) if year_match else _published_day(record)[:4]
+    period = period_match.group(1).replace(" ", "_").replace("-", "_") if period_match else "unknown_period"
+    key_material = f"financial_results|{symbol}|{year}|{period}"
+    return DedupResult(
+        key=f"robot_template:{key_material}",
+        method="robot_template",
+        debug={
+            "version": DEDUP_VERSION,
+            "source": "us_robot_financial_results_template",
+            "template": "financial_results",
+            "symbol": symbol,
+            "year": year,
+            "period": period,
+            "title": title,
+        },
+    )
+
+
+def _technical_signal_template_key(
+    record: dict[str, Any],
+    title: str,
+    normalized: str,
+    symbol: str | None,
+) -> DedupResult | None:
+    if "chart signals" not in normalized and "bollinger" not in normalized and " rsi " not in f" {normalized} ":
+        return None
+
+    subject = symbol or _title_subject_slug(title)
+    if not subject:
+        return None
+
+    timeframe_match = re.search(r"\b(\d+\s*min|\d+\s*hour|\d+\s*day|daily|weekly)\b", normalized)
+    timeframe = timeframe_match.group(1).replace(" ", "") if timeframe_match else "unknown_timeframe"
+    signals = [name for name, pattern in _ROBOT_SIGNAL_PATTERNS if pattern.search(normalized)]
+    if not signals:
+        return None
+
+    key_material = f"technical_signal|{subject}|{timeframe}|{'+'.join(sorted(set(signals)))}|{_published_day(record)}"
+    return DedupResult(
+        key=f"robot_template:{key_material}",
+        method="robot_template",
+        debug={
+            "version": DEDUP_VERSION,
+            "source": "us_robot_technical_signal_template",
+            "template": "technical_signal",
+            "subject": subject,
+            "timeframe": timeframe,
+            "signals": sorted(set(signals)),
+            "published_day": _published_day(record),
+            "title": title,
+        },
+    )
+
+
+def _insider_template_key(
+    record: dict[str, Any],
+    title: str,
+    normalized: str,
+    symbol: str | None,
+) -> DedupResult | None:
+    if "insider transactions reported" not in normalized and "insider trading" not in normalized:
+        return None
+    subject = symbol or _title_subject_slug(title)
+    if not subject:
+        return None
+    key_material = f"insider_transaction|{subject}|{_published_day(record)}"
+    return DedupResult(
+        key=f"robot_template:{key_material}",
+        method="robot_template",
+        debug={
+            "version": DEDUP_VERSION,
+            "source": "us_robot_insider_transaction_template",
+            "template": "insider_transaction",
+            "subject": subject,
+            "published_day": _published_day(record),
+            "title": title,
+        },
+    )
+
+
+def _title_subject_slug(title: str) -> str | None:
+    text = html.unescape(title)
+    subject = re.split(r"'s|\||:|-", text, maxsplit=1)[0]
+    subject = _plain_market_text(subject)
+    subject = subject.strip(" .-")
+    if len(subject) < 3:
+        return None
+    return "_".join(subject.split()[:6])
+
+
 def compute_dedup_key(record: dict[str, Any]) -> DedupResult:
     notice_key = _notice_attachment_key(record)
     if notice_key:
@@ -190,6 +428,14 @@ def compute_dedup_key(record: dict[str, Any]) -> DedupResult:
                 "normalized_url": normalized_url,
             },
         )
+
+    post_key = _post_fingerprint_key(record)
+    if post_key:
+        return post_key
+
+    robot_key = _robot_template_key(record)
+    if robot_key:
+        return robot_key
 
     digest_key = content_hash(record.get("title"), record.get("body"))
     if digest_key:

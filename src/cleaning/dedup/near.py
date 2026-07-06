@@ -65,6 +65,8 @@ class UnionFind:
 class NearDuplicateDetector:
     def __init__(self, config: NearDuplicateConfig):
         self.config = config
+        self._minhash_cls = import_module("datasketch").MinHash
+        self._fuzz = import_module("rapidfuzz.fuzz")
 
     def signature_for(self, record: dict[str, Any]) -> NearSignature | None:
         if not self.config.enabled:
@@ -80,8 +82,7 @@ class NearDuplicateDetector:
         if not shingles:
             return None
 
-        minhash_cls = import_module("datasketch").MinHash
-        minhash = minhash_cls(num_perm=self.config.num_perm, seed=self.config.seed)
+        minhash = self._minhash_cls(num_perm=self.config.num_perm, seed=self.config.seed)
         for shingle in shingles:
             minhash.update(shingle.encode("utf-8"))
 
@@ -110,14 +111,14 @@ class NearDuplicateDetector:
 
     def decide(self, left: NearSignature, right: NearSignature) -> NearDecision:
         jaccard = _signature_jaccard(left.signature, right.signature)
-        fuzz_module = import_module("rapidfuzz.fuzz")
-        fuzzy_score = float(fuzz_module.token_set_ratio(left.body, right.body))
-        title_score = float(fuzz_module.token_set_ratio(left.title, right.title))
-
         if jaccard < self.config.threshold:
-            return NearDecision("report_only", "below_minhash_threshold", jaccard, fuzzy_score, title_score)
+            return NearDecision("report_only", "below_minhash_threshold", jaccard, 0.0, 0.0)
+
+        fuzzy_score = float(self._fuzz.token_set_ratio(left.body, right.body))
         if fuzzy_score < self.config.fuzzy_threshold:
-            return NearDecision("report_only", "below_fuzzy_threshold", jaccard, fuzzy_score, title_score)
+            return NearDecision("report_only", "below_fuzzy_threshold", jaccard, fuzzy_score, 0.0)
+
+        title_score = float(self._fuzz.token_set_ratio(left.title, right.title))
         if left.host != right.host and title_score < self.config.title_threshold:
             return NearDecision("report_only", "different_host_and_title", jaccard, fuzzy_score, title_score)
 
