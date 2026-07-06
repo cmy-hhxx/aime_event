@@ -3,7 +3,7 @@
 流程: 取簇内 top 文章正文(seek 直读原始 jsonl) -> 组 prompt -> DeepSeek 输出严格 JSON.
 泄露控制在 prompt 层硬约束: facts 只允许事件日当天及之前可知的信息.
 
-用法: python -m src.extraction.structure [--workers 24] [--limit 0]
+用法: python -m src.main extract structure [--workers 24] [--limit 0]
 输出: structured/structured.jsonl (断点续跑), reports/stage_d_summary.json
 """
 from __future__ import annotations

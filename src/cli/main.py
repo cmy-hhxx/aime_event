@@ -26,7 +26,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="AIME 事件流水线：cleaning / extraction / completion",
         epilog=(
-            "阶段入口：clean, extract, complete, run-all。"
+            "阶段入口：clean, extract, complete。"
             "兼容旧命令：run, fresh, export 仍直接执行 cleaning。"
         ),
     )

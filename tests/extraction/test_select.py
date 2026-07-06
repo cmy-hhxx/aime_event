@@ -45,3 +45,10 @@ def test_final_select_per_symbol_cap():
 def test_gate_where_eras():
     w = select.gate_where("2023-07-01", 5, 3, 2)
     assert "2023-07-01" in w and "n_articles >= 5" in w and "n_articles >= 2" in w
+
+
+def test_final_select_malformed_date_falls_back():
+    cands = [_cand("E1")]
+    triage = {"E1": _triage(3, date="2025/03/15")}  # 长度10但非ISO, 必须回退 peak_date
+    picked = select.final_select(cands, triage, 3, 12)
+    assert picked[0]["event_date"] == "2025-01-10"

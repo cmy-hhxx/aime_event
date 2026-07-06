@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from collections import Counter, defaultdict
 
@@ -20,6 +21,8 @@ import pyarrow as pa
 from src import config
 from src.common import llm
 from src.extraction import prompts
+
+ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def gate_where(era_split: str, recent_min: int, recent_alt_min: int, early_min: int) -> str:
@@ -101,7 +104,7 @@ def final_select(cands: list[dict], triage: dict[str, dict],
         if int(t.get("significance") or 0) < min_significance:
             continue
         d = t.get("event_date") or c["peak_date"]
-        if not (isinstance(d, str) and len(d) == 10 and "2000-01-01" <= d <= "2026-08-01"):
+        if not (isinstance(d, str) and ISO_DATE_RE.match(d) and "2000-01-01" <= d <= "2026-08-01"):
             d = c["peak_date"]
         valid.append({**c, **{k: t.get(k) for k in
                      ("event_type", "event_family", "event_subject", "primary_symbols",

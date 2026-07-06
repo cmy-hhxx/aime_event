@@ -111,7 +111,7 @@ scp ~/event_e/prices_daily.parquet pdf2json:/mnt/ainvest_content/v3/event_datase
 | 现象 | 处理 |
 |---|---|
 | index worker 全 D 状态、日志停滞 | ceph-fuse 拥塞：kill 后降 --workers 重跑（断点续跑不丢） |
-| select/structure 大量 `_error` | 限流：降 --triage-workers/--workers 到 8，重跑自动续 |
+| select/structure 大量 `_error` | 限流。**注意**：`_error` 行也会被断点续跑当作已完成跳过，重试前先剔除失败行再降 workers 重跑：`grep -v '"_error"' selected/triage.jsonl > t && mv t selected/triage.jsonl`（structure 对 structured.jsonl 同理） |
 | yfinance 大面积失败 | 本地网络/限流：等 10 分钟重跑 fetch（增量） |
 | 某阶段全部重来 | index 加 `--fresh`；cluster 直接重跑；select/structure 删对应 jsonl；fetch 删 parquet |
 

@@ -17,6 +17,7 @@ import time
 from src import config
 
 SYM_RE = re.compile(r"^[A-Z][A-Z0-9.\-]{0,5}$")
+ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 PRE_SESSIONS = 15    # S0 事件前可见交易日数
 POST_SESSIONS = 26   # 标签审计窗交易日数(>=20d horizon + 余量)
 
@@ -130,7 +131,13 @@ def run_label(args) -> None:
     n_ok = n_skip = 0
     with open(out_path, "w") as out:
         for r in events:
-            ev_date = (r.get("main_event") or {}).get("event_date") or r["_triage"]["event_date"]
+            # LLM 产出的 event_date 需严格 ISO 校验, 畸形日期会让 bisect 静默错位
+            ev_date = (r.get("main_event") or {}).get("event_date")
+            if not (isinstance(ev_date, str) and ISO_DATE_RE.match(ev_date)):
+                ev_date = r["_triage"]["event_date"]
+            if not (isinstance(ev_date, str) and ISO_DATE_RE.match(ev_date)):
+                n_skip += 1
+                continue
             bucket = (r.get("event_timestamp_et") or {}).get("session_bucket") or "unknown"
             syms = event_symbols(r)
             per_sym, labels = {}, []
