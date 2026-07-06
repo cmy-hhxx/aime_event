@@ -46,6 +46,30 @@ NEAR_MAX_BUCKET_SIZE = 250  # LSH 桶最大记录数，防止桶爆炸
 NEAR_MAX_CANDIDATE_PAIRS = 1_000_000  # 近似去重候选对上限
 NEAR_MAX_REPORT_PAIRS = 10_000  # near_duplicates.jsonl 最多写入对数
 
+# --- eventpack: 事件训练包流水线 (extract/complete 阶段) ---
+EVENT_V1_DIR = "/mnt/ainvest_content/v3/v1"  # 清洗后新闻语料(仅精确去重)
+EVENT_V2_DIR = "/mnt/ainvest_content/v3/v2"  # 研报/电话会段落
+EVENT_OUT_ROOT = "/mnt/ainvest_content/v3/event_dataset"
+EVENT_INDEX_DIR = f"{EVENT_OUT_ROOT}/index"
+EVENT_CANDIDATE_DIR = f"{EVENT_OUT_ROOT}/candidates"
+EVENT_SELECTED_DIR = f"{EVENT_OUT_ROOT}/selected"
+EVENT_STRUCTURED_DIR = f"{EVENT_OUT_ROOT}/structured"
+EVENT_MARKET_DIR = f"{EVENT_OUT_ROOT}/market"
+EVENT_FINAL_DIR = f"{EVENT_OUT_ROOT}/final"
+EVENT_REPORT_DIR = f"{EVENT_OUT_ROOT}/reports"
+# ceph-fuse 并发红线: 实测 48 卡死 / 12 拥塞 / 6 正常, 禁超 10
+EVENT_INDEX_WORKERS = 6
+EVENT_TITLE_MAX_CHARS = 400
+# 阈值抽取(无数量配额): 规则送审门 + LLM significance 门
+EVENT_ERA_SPLIT = "2023-07-01"
+EVENT_RECENT_MIN_ARTICLES = 5      # 近三年送审: n_articles>=5
+EVENT_RECENT_ALT_MIN_ARTICLES = 3  # 或 n_articles>=3 且有研报佐证
+EVENT_EARLY_MIN_ARTICLES = 2       # 早年送审: n_articles>=2
+EVENT_MIN_SIGNIFICANCE = 3         # LLM 入选门
+EVENT_PER_SYMBOL_CAP = 12          # 单 symbol 事件上限, 0=关闭
+EVENT_FETCH_START = "2013-06-01"   # yfinance 拉取窗
+EVENT_FETCH_END = "2026-07-01"
+
 # ============================================================
 # 以下由程序组装，一般不需要修改
 # ============================================================
