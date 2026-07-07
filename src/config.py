@@ -14,7 +14,6 @@ INPUT_DIR = "/mnt/ainvest_content/v1"  # 原始 NDJSON 输入目录
 CLEANED_DIR = "/mnt/ainvest_content/v3/v1"  # 审计格式 canonical 输出
 DUPLICATES_DIR = "output/duplicates"  # 重复记录输出（默认不写）
 REJECTS_DIR = "output/rejects"  # 被拒绝的原始行（默认不写）
-EVENT_DIR = "output/event_input"  # 事件抽取输入（默认不写）
 STATE_DIR = "/tmp/aime_event/v1/state"  # 运行中 SQLite 状态库，放本地盘减少 Ceph 随机 IO
 PAYLOAD_DIR = "/tmp/aime_event/v1/state/payloads"  # 运行中 payload 分片，放本地盘减少 Ceph 随机 IO
 FINAL_STATE_DIR = "/mnt/ainvest_content/v3/v1/state"  # 运行结束后保存的最终 state
@@ -46,6 +45,30 @@ NEAR_MAX_BUCKET_SIZE = 250  # LSH 桶最大记录数，防止桶爆炸
 NEAR_MAX_CANDIDATE_PAIRS = 1_000_000  # 近似去重候选对上限
 NEAR_MAX_REPORT_PAIRS = 10_000  # near_duplicates.jsonl 最多写入对数
 
+# --- eventpack: 事件训练包流水线 (extract/complete 阶段) ---
+EVENT_V1_DIR = "/mnt/ainvest_content/v3/v1"  # 清洗后新闻语料(仅精确去重)
+EVENT_V2_DIR = "/mnt/ainvest_content/v3/v2"  # 研报/电话会段落
+EVENT_OUT_ROOT = "/mnt/ainvest_content/v3/event_dataset"
+EVENT_INDEX_DIR = f"{EVENT_OUT_ROOT}/index"
+EVENT_CANDIDATE_DIR = f"{EVENT_OUT_ROOT}/candidates"
+EVENT_SELECTED_DIR = f"{EVENT_OUT_ROOT}/selected"
+EVENT_STRUCTURED_DIR = f"{EVENT_OUT_ROOT}/structured"
+EVENT_MARKET_DIR = f"{EVENT_OUT_ROOT}/market"
+EVENT_FINAL_DIR = f"{EVENT_OUT_ROOT}/final"
+EVENT_REPORT_DIR = f"{EVENT_OUT_ROOT}/reports"
+# ceph-fuse 并发红线: 实测 48 卡死 / 12 拥塞 / 6 正常, 禁超 10
+EVENT_INDEX_WORKERS = 6
+EVENT_TITLE_MAX_CHARS = 400
+# 阈值抽取(无数量配额): 规则送审门 + LLM significance 门
+EVENT_ERA_SPLIT = "2023-07-01"
+EVENT_RECENT_MIN_ARTICLES = 5      # 近三年送审: n_articles>=5
+EVENT_RECENT_ALT_MIN_ARTICLES = 3  # 或 n_articles>=3 且有研报佐证
+EVENT_EARLY_MIN_ARTICLES = 2       # 早年送审: n_articles>=2
+EVENT_MIN_SIGNIFICANCE = 3         # LLM 入选门
+EVENT_PER_SYMBOL_CAP = 12          # 单 symbol 事件上限, 0=关闭
+EVENT_FETCH_START = "2013-06-01"   # yfinance 拉取窗
+EVENT_FETCH_END = "2026-07-01"
+
 # ============================================================
 # 以下由程序组装，一般不需要修改
 # ============================================================
@@ -57,7 +80,6 @@ class PathsConfig:
     cleaned_dir: Path = field(default_factory=lambda: Path(CLEANED_DIR))
     duplicates_dir: Path = field(default_factory=lambda: Path(DUPLICATES_DIR))
     rejects_dir: Path = field(default_factory=lambda: Path(REJECTS_DIR))
-    event_dir: Path = field(default_factory=lambda: Path(EVENT_DIR))
     state_dir: Path = field(default_factory=lambda: Path(STATE_DIR))
     payload_dir: Path = field(default_factory=lambda: Path(PAYLOAD_DIR))
     final_state_dir: Path = field(default_factory=lambda: Path(FINAL_STATE_DIR))

@@ -6,7 +6,6 @@ from dataclasses import replace
 from pathlib import Path
 
 from src.config import DEFAULT_CONFIG, PipelineConfig
-from src.extraction.models import ExtractionSettings
 
 
 def positive_int(value: str) -> int:
@@ -27,7 +26,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="AIME 事件流水线：cleaning / extraction / completion",
         epilog=(
-            "阶段入口：clean, extract, complete, run-all。"
+            "阶段入口：clean, extract, complete。"
             "兼容旧命令：run, fresh, export 仍直接执行 cleaning。"
         ),
     )
@@ -44,34 +43,6 @@ def build_clean_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def build_stage_parser(stage: str, description: str) -> argparse.ArgumentParser:
-    return argparse.ArgumentParser(
-        prog=f"python -m src.main {stage}",
-        description=description,
-    )
-
-
-def build_extract_parser() -> argparse.ArgumentParser:
-    parser = build_stage_parser("extract", "事件抽取阶段：读取 cleaned_batch*.jsonl，调用 LLM API 输出 event_batch*.jsonl")
-    parser.add_argument("--input", default="/mnt/ainvest_content/v3/v1", help="cleaned 输入目录或单个 JSONL 文件")
-    parser.add_argument("--output", default="/mnt/ainvest_content/v3/v1/extracted", help="事件抽取输出目录")
-    parser.add_argument("--env-file", default=".env", help="API 配置文件")
-    parser.add_argument("--base-url", help="OpenAI-compatible base URL，通常以 /v1 结尾")
-    parser.add_argument("--api-key", help="API key；也可写入 .env")
-    parser.add_argument("--model", help="抽取模型名；也可写入 .env")
-    parser.add_argument("--limit", type=positive_int, help="最多处理多少条，便于小样本试跑")
-    parser.add_argument("--timeout-seconds", type=positive_int, default=120, help="单次 API 请求超时")
-    parser.add_argument("--max-retries", type=int, default=2, help="单条记录失败后的重试次数")
-    parser.add_argument("--log-every-rows", type=positive_int, default=100, help="每处理多少条打印一次进度")
-    parser.add_argument("--max-body-chars", type=positive_int, default=8000, help="送入模型的正文最大字符数")
-    parser.add_argument("--temperature", type=float, default=0.0, help="模型 temperature")
-    parser.add_argument("--max-tokens", type=positive_int, default=1200, help="模型最大输出 token")
-    parser.add_argument("--include-raw-response", action="store_true", help="在输出中保留模型原始 JSON 响应")
-    parser.add_argument("--random-sample", action="store_true", help="从输入 JSONL/NDJSON 中随机抽样，需配合 --limit")
-    parser.add_argument("--random-seed", type=int, help="随机抽样种子；不填则每次随机")
-    return parser
-
-
 def add_cleaning_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "command",
@@ -84,7 +55,6 @@ def add_cleaning_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--output", help="高级覆盖：cleaned 输出目录")
     parser.add_argument("--duplicates", help="高级覆盖：duplicates 输出目录")
     parser.add_argument("--rejects", help="高级覆盖：rejects 输出目录")
-    parser.add_argument("--event-output", help="高级覆盖：event_input 输出目录")
     parser.add_argument("--state", help="高级覆盖：state 目录")
     parser.add_argument("--payload-dir", help="高级覆盖：payload 目录")
     parser.add_argument("--final-state-dir", help="高级覆盖：最终保存 state 的目录")
@@ -99,7 +69,7 @@ def add_cleaning_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--near-threshold", type=positive_float, help=argparse.SUPPRESS)
     parser.add_argument("--near-fuzzy-threshold", type=positive_float, help=argparse.SUPPRESS)
     parser.add_argument("--no-near-dedup", action="store_true", help=argparse.SUPPRESS)
-    parser.add_argument("--write-aux-outputs", action="store_true", help="写出 duplicates/rejects/event_input 辅助文件")
+    parser.add_argument("--write-aux-outputs", action="store_true", help="写出 duplicates/rejects 辅助文件")
     parser.add_argument("--force", action="store_true", help="强制重跑已完成的 batch")
     parser.add_argument("--export-only", action="store_true", help="兼容别名：等同 export 命令")
     parser.add_argument("--reset-state", action="store_true", help="兼容别名：等同 fresh 命令")
@@ -115,8 +85,6 @@ def config_from_args(args: argparse.Namespace, base: PipelineConfig = DEFAULT_CO
         path_updates["duplicates_dir"] = Path(args.duplicates)
     if args.rejects:
         path_updates["rejects_dir"] = Path(args.rejects)
-    if args.event_output:
-        path_updates["event_dir"] = Path(args.event_output)
     if args.state:
         path_updates["state_dir"] = Path(args.state)
     if args.payload_dir:
@@ -171,25 +139,76 @@ def run_cleaning_from_args(args: argparse.Namespace) -> None:
     )
 
 
-def extraction_settings_from_args(args: argparse.Namespace) -> ExtractionSettings:
-    return ExtractionSettings(
-        input_path=Path(args.input),
-        output_dir=Path(args.output),
-        env_file=Path(args.env_file),
-        base_url=args.base_url,
-        api_key=args.api_key,
-        model=args.model,
-        limit=args.limit,
-        timeout_seconds=args.timeout_seconds,
-        max_retries=args.max_retries,
-        log_every_rows=args.log_every_rows,
-        max_body_chars=args.max_body_chars,
-        temperature=args.temperature,
-        max_tokens=args.max_tokens,
-        include_raw_response=args.include_raw_response,
-        random_sample=args.random_sample,
-        random_seed=args.random_seed,
+def build_event_parser(stage: str) -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog=f"python -m src.main {stage}",
+        description=("事件抽取：index建索引 / cluster聚类 / select阈值筛选 / structure LLM结构化"
+                     if stage == "extract" else
+                     "事件补全：fetch拉行情(本地Mac跑) / label打标 / assemble组装v4"),
     )
+    sub = parser.add_subparsers(dest="step", required=True)
+    if stage == "extract":
+        p = sub.add_parser("index", help="扫描 v1+v2 建 parquet 索引(断点续跑)")
+        p.add_argument("--workers", type=positive_int, default=None,
+                       help="ceph-fuse 红线: 默认取 config(6), 禁超 10")
+        p.add_argument("--limit", type=int, default=0)
+        p.add_argument("--fresh", action="store_true")
+        p = sub.add_parser("cluster", help="事件候选聚类")
+        p.add_argument("--workers", type=positive_int, default=32)
+        p.add_argument("--shards", type=positive_int, default=96)
+        p = sub.add_parser("select", help="阈值筛选(--sweep 看阈值表)")
+        p.add_argument("--sweep", action="store_true")
+        p.add_argument("--dry-run", action="store_true")
+        p.add_argument("--limit", type=int, default=0, help="只送审前 N 个候选，用于小样本冒烟")
+        p.add_argument("--triage-workers", type=positive_int, default=24)
+        p = sub.add_parser("structure", help="LLM 结构化(先 --limit 5 验收)")
+        p.add_argument("--workers", type=positive_int, default=24)
+        p.add_argument("--limit", type=int, default=0)
+        sub.add_parser("all", help="顺序跑 index->cluster->select->structure(阈值确定后用)")
+    else:
+        from src import config
+        p = sub.add_parser("fetch", help="yfinance 拉日线面板(在本地 Mac 跑)")
+        p.add_argument("--batch", type=positive_int, default=40)
+        p.add_argument("--pause", type=float, default=2.0)
+        p.add_argument("--structured", default=f"{config.EVENT_STRUCTURED_DIR}/structured.jsonl")
+        p.add_argument("--outdir", default=config.EVENT_MARKET_DIR)
+        sub.add_parser("label", help="离线计算 1D/5D/20D 标签")
+        p = sub.add_parser("assemble", help="组装 v4 成品 + 审计")
+        p.add_argument("--max-cases", type=int, default=0)
+        sub.add_parser("all", help="label -> assemble (fetch 需单独在本地跑)")
+    return parser
+
+
+def run_extract(args: argparse.Namespace) -> None:
+    from src import config
+    from src.extraction import cluster, index, select, structure
+    steps = {"index": index.run, "cluster": cluster.run,
+             "select": select.run, "structure": structure.run}
+    if args.step == "all":
+        import argparse as ap
+        # ceph-fuse 红线: index 并发必须走 config 缺省, 不能落到 cpu_count
+        index.run(ap.Namespace(workers=config.EVENT_INDEX_WORKERS, limit=0, fresh=False))
+        cluster.run(ap.Namespace(workers=32, shards=96))
+        select.run(ap.Namespace(sweep=False, dry_run=False, triage_workers=24))
+        structure.run(ap.Namespace(workers=24, limit=0))
+        return
+    if args.step == "index" and args.workers is None:
+        args.workers = config.EVENT_INDEX_WORKERS
+    steps[args.step](args)
+
+
+def run_complete(args: argparse.Namespace) -> None:
+    from src.completion import assemble, market
+    if args.step == "fetch":
+        market.run_fetch(args)
+    elif args.step == "label":
+        market.run_label(args)
+    elif args.step == "assemble":
+        assemble.run(args)
+    else:  # all = label -> assemble
+        import argparse as ap
+        market.run_label(ap.Namespace())
+        assemble.run(ap.Namespace(max_cases=0))
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -201,28 +220,13 @@ def main(argv: list[str] | None = None) -> None:
         run_cleaning_from_args(args)
         return
     if stage == "extract":
-        args = build_extract_parser().parse_args(argv[1:])
-
-        from src.extraction.pipeline import run_pipeline as run_extraction_pipeline
-
-        run_extraction_pipeline(extraction_settings_from_args(args))
+        run_extract(build_event_parser("extract").parse_args(argv[1:]))
         return
     if stage == "complete":
-        build_stage_parser("complete", "事件补全阶段入口（当前为占位实现）").parse_args(argv[1:])
-
-        from src.completion.pipeline import run_pipeline as run_completion_pipeline
-
-        run_completion_pipeline()
+        run_complete(build_event_parser("complete").parse_args(argv[1:]))
         return
     if stage == "run-all":
-        from src.completion.pipeline import run_pipeline as run_completion_pipeline
-        from src.extraction.pipeline import run_pipeline as run_extraction_pipeline
-
-        args = build_clean_parser().parse_args(argv[1:])
-        run_cleaning_from_args(args)
-        run_extraction_pipeline()
-        run_completion_pipeline()
-        return
+        raise SystemExit("run-all 已移除: 请按 docs/pipeline.md 分阶段执行(select 需人工定阈值)")
 
     args = build_parser().parse_args(argv)
     run_cleaning_from_args(args)

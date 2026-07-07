@@ -28,7 +28,6 @@ def build_storage_summary(
     cleaned_dir: Path,
     dup_dir: Path,
     reject_dir: Path,
-    event_dir: Path,
 ) -> dict[str, int]:
     db.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
     db_bytes = sum(
@@ -40,8 +39,7 @@ def build_storage_summary(
     cleaned_bytes = directory_size(cleaned_dir)
     duplicates_bytes = directory_size(dup_dir)
     rejects_bytes = directory_size(reject_dir)
-    event_bytes = directory_size(event_dir)
-    total_bytes = db_bytes + payload_bytes + cleaned_bytes + duplicates_bytes + rejects_bytes + event_bytes
+    total_bytes = db_bytes + payload_bytes + cleaned_bytes + duplicates_bytes + rejects_bytes
     estimated = int(total_bytes / total_input * db.target_scale_rows) if total_input else 0
     return {
         "db_bytes": db_bytes,
@@ -49,7 +47,6 @@ def build_storage_summary(
         "cleaned_bytes": cleaned_bytes,
         "duplicates_bytes": duplicates_bytes,
         "rejects_bytes": rejects_bytes,
-        "event_input_bytes": event_bytes,
         "total_pipeline_bytes": total_bytes,
         "estimated_20m_rows_bytes": estimated,
     }
@@ -60,7 +57,6 @@ def build_summary(
     cleaned_dir: Path,
     dup_dir: Path,
     reject_dir: Path,
-    event_dir: Path,
 ) -> dict[str, int | dict[str, int]]:
     db.build_winner_tables()
     conn = db.conn
@@ -103,5 +99,5 @@ def build_summary(
             conn,
             "SELECT COUNT(*) FROM near_candidate_pairs WHERE status = 'report_only'",
         ),
-        "storage": build_storage_summary(db, total_input, cleaned_dir, dup_dir, reject_dir, event_dir),
+        "storage": build_storage_summary(db, total_input, cleaned_dir, dup_dir, reject_dir),
     }

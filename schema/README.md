@@ -8,16 +8,11 @@
 |------|------|----------|
 | [cleaning/cleaned_record.schema.json](cleaning/cleaned_record.schema.json) | 完整审计格式（CleanedRecord） | `output/cleaned/`、`output/duplicates/` |
 | [cleaning/cleaned_record.schema.jsonc](cleaning/cleaned_record.schema.jsonc) | CleanedRecord 中文说明 + 去重规则 | — |
-| [extraction/event_record.schema.json](extraction/event_record.schema.json) | 事件抽取精简格式（EventRecord） | `output/event_input/` |
-| [extraction/event_record.schema.jsonc](extraction/event_record.schema.jsonc) | EventRecord 中文说明 | — |
-| [completion/completed_event.schema.json](completion/completed_event.schema.json) | 事件补全输出格式（CompletedEvent） | `output/completed/` |
+| [extraction/selected_event.schema.json](extraction/selected_event.schema.json) | 阈值筛选产物（SelectedEvent，selected_events.jsonl 单行） | `event_dataset/selected/` |
+| [completion/final_case.schema.json](completion/final_case.schema.json) | v4 事件训练包关键字段校验（增强层允许留空占位） | `event_dataset/final/` |
 
-### CleanedRecord vs EventRecord
-
-- **CleanedRecord**：保留 `dedup`、`meta`、`tags`、`source.author` 等审计字段，用于溯源与质量审计。
-- **EventRecord**：从 CleanedRecord 投影，去掉审计字段，`tags` 转为 `topics`（已去除重要性与地区标签），供下游事件概念抽取使用。
-
-两种格式均遵循：**不输出 `null`，空字段省略**。
+CleanedRecord 保留 `dedup`、`meta`、`tags`、`source.author` 等审计字段用于溯源，
+遵循：**不输出 `null`，空字段省略**。旧的逐条抽取格式与 cleaning 的 event_input 辅助输出（EventRecord）已随旧实现移除，git 历史可查。
 
 ## 报表格式
 

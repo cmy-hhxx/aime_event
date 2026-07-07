@@ -46,3 +46,21 @@ def test_legacy_help_keeps_cleaning_options() -> None:
 
     assert "--workers" in result.stdout
     assert "--no-near-dedup" in result.stdout
+
+
+def test_extract_subcommands_help(capsys):
+    import pytest
+    from src.cli.main import main
+    for argv in (["extract", "--help"], ["complete", "--help"]):
+        with pytest.raises(SystemExit) as e:
+            main(argv)
+        assert e.value.code == 0
+    out = capsys.readouterr().out
+    assert "assemble" in out
+
+
+def test_run_all_removed():
+    import pytest
+    from src.cli.main import main
+    with pytest.raises(SystemExit):
+        main(["run-all"])

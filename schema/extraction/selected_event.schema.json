@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SelectedEvent",
+  "description": "extract select 产物 selected_events.jsonl 单行。",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["event_id", "event_date", "event_type", "significance"],
+  "properties": {
+    "event_id": {"type": "string", "minLength": 1},
+    "event_date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+    "event_type": {"type": "string"},
+    "event_family": {"type": ["string", "null"]},
+    "event_subject": {"type": ["string", "null"]},
+    "primary_symbols": {"type": ["array", "null"], "items": {"type": "string"}},
+    "significance": {"type": "integer", "minimum": 3, "maximum": 5},
+    "title_cn": {"type": ["string", "null"]},
+    "n_articles": {"type": "integer", "minimum": 1}
+  }
+}

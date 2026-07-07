@@ -42,7 +42,6 @@ def write_reports(db: StagingDB, config: PipelineConfig) -> dict[str, Any]:
         paths.cleaned_dir,
         paths.duplicates_dir,
         paths.rejects_dir,
-        paths.event_dir,
     )
     _write_json(reports_dir / "summary.json", summary)
 

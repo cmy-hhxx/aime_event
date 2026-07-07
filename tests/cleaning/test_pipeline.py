@@ -134,8 +134,6 @@ def _run_pipeline(tmp_path: Path, *extra: str) -> None:
         str(tmp_path / "output" / "duplicates"),
         "--rejects",
         str(tmp_path / "output" / "rejects"),
-        "--event-output",
-        str(tmp_path / "output" / "event_input"),
         "--state",
         str(tmp_path / "state"),
         "--payload-dir",
@@ -189,16 +187,12 @@ def test_pipeline_exports_deterministic_global_parts_and_rejects(tmp_path: Path)
 
     cleaned = _read_parts(tmp_path / "output" / "cleaned")
     duplicates = _read_parts(tmp_path / "output" / "duplicates")
-    event_records = _read_parts(tmp_path / "output" / "event_input")
     rejects = _read_parts(tmp_path / "output" / "rejects")
     schema = json.loads((ROOT / "schema" / "cleaning" / "cleaned_record.schema.json").read_text())
-    event_schema = json.loads((ROOT / "schema" / "extraction" / "event_record.schema.json").read_text())
     validator = jsonschema.Draft7Validator(schema, format_checker=jsonschema.FormatChecker())
-    event_validator = jsonschema.Draft7Validator(event_schema, format_checker=jsonschema.FormatChecker())
 
     assert len(cleaned) == 6
     assert len(duplicates) == 4
-    assert len(event_records) == len(cleaned)
     assert len(rejects) == 3
     assert len({record["dedup"]["key"] for record in cleaned}) == len(cleaned)
     assert {record["id"] for record in cleaned} == {"long", "seek-long", "feed-a", "feed-b", "near-a", "notice"}
@@ -216,13 +210,6 @@ def test_pipeline_exports_deterministic_global_parts_and_rejects(tmp_path: Path)
     for record in cleaned + duplicates:
         assert not _has_null(record)
         validator.validate(record)
-    for record in event_records:
-        assert not _has_null(record)
-        event_validator.validate(record)
-        assert "dedup" not in record
-        assert "meta" not in record
-        assert "type_code" not in record
-        assert "updated_at" not in record
 
     summary = json.loads((tmp_path / "reports" / "summary.json").read_text())
     assert summary["total_input"] == 13
@@ -289,8 +276,6 @@ def test_exports_are_sorted_by_published_at_ascending_across_parts(tmp_path: Pat
     _run_pipeline(tmp_path, "--no-near-dedup")
 
     cleaned = _read_parts(tmp_path / "output" / "cleaned")
-    event_records = _read_parts(tmp_path / "output" / "event_input")
 
     assert [record["id"] for record in cleaned] == ["early", "middle", "late"]
-    assert [record["id"] for record in event_records] == ["early", "middle", "late"]
     assert len(list((tmp_path / "output" / "cleaned").glob("*.jsonl"))) == 2
