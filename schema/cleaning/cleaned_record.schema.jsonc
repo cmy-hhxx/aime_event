@@ -9,7 +9,6 @@
   // - dedup.version 必须为 4
   //
   // === EventRecord（抽取格式）===
-  // - 输出到 output/event_input/event_part_*.ndjson
   // - 省略 dedup、meta、type_code、summary、updated_at
   // - 原始 tags 转为 topics，去除地区与重要性标签
   // - source 仅保留 name 和 url

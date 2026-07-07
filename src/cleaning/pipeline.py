@@ -12,7 +12,7 @@ import orjson
 from src.config import PipelineConfig, validate_config
 from src.cleaning.dedup.exact import finalize_record
 from src.cleaning.ingest.transform import TransformResult, transform_line
-from src.cleaning.output.views import build_cleaned_record, build_event_record
+from src.cleaning.output.views import build_cleaned_record
 from src.common.io import PartWriter
 from src.common.logging import ProgressLogger, log
 from src.common.paths import discover_content_batches, replace_output_dir, tmp_output_dir
@@ -125,7 +125,6 @@ def export_outputs(config: PipelineConfig, db: StagingDB) -> dict[str, int]:
         aux_writers = {
             "duplicates": PartWriter(tmp_output_dir(paths.duplicates_dir), "dup", part_size),
             "rejects": PartWriter(tmp_output_dir(paths.rejects_dir), "reject", part_size),
-            "event_input": PartWriter(tmp_output_dir(paths.event_dir), "event", part_size),
         }
     stats: Counter[str] = Counter()
     cleaned_progress = ProgressLogger("Export cleaned", runtime.log_every_rows, runtime.log_every_seconds)
@@ -146,9 +145,6 @@ def export_outputs(config: PipelineConfig, db: StagingDB) -> dict[str, int]:
             cleaned_writer.write(cleaned_record)
             stats["cleaned"] += 1
             cleaned_progress.maybe(stats["cleaned"])
-            if "event_input" in aux_writers:
-                aux_writers["event_input"].write(build_event_record(cleaned_record))
-                stats["event_input"] += 1
 
         if "duplicates" in aux_writers:
             duplicate_progress = ProgressLogger("Export duplicates", runtime.log_every_rows, runtime.log_every_seconds)
@@ -192,7 +188,6 @@ def export_outputs(config: PipelineConfig, db: StagingDB) -> dict[str, int]:
     if runtime.write_aux_outputs:
         replace_output_dir(paths.duplicates_dir.parent / f".{paths.duplicates_dir.name}.tmp", paths.duplicates_dir)
         replace_output_dir(paths.rejects_dir.parent / f".{paths.rejects_dir.name}.tmp", paths.rejects_dir)
-        replace_output_dir(paths.event_dir.parent / f".{paths.event_dir.name}.tmp", paths.event_dir)
         log("Export: replaced auxiliary output directories")
     return dict(stats)
 

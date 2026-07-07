@@ -60,7 +60,6 @@
         "cleaned_bytes",
         "duplicates_bytes",
         "rejects_bytes",
-        "event_input_bytes",
         "total_pipeline_bytes",
         "estimated_20m_rows_bytes"
       ],
@@ -70,7 +69,6 @@
         "cleaned_bytes": { "type": "integer", "minimum": 0, "description": "output/cleaned/ 字节数。" },
         "duplicates_bytes": { "type": "integer", "minimum": 0, "description": "output/duplicates/ 字节数。" },
         "rejects_bytes": { "type": "integer", "minimum": 0, "description": "output/rejects/ 字节数。" },
-        "event_input_bytes": { "type": "integer", "minimum": 0, "description": "output/event_input/ 字节数。" },
         "total_pipeline_bytes": { "type": "integer", "minimum": 0, "description": "上述目录总字节数。" },
         "estimated_20m_rows_bytes": { "type": "integer", "minimum": 0, "description": "按当前行均大小估算 2000 万行总存储。" }
       }

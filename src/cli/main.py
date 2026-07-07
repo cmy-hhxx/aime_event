@@ -55,7 +55,6 @@ def add_cleaning_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--output", help="高级覆盖：cleaned 输出目录")
     parser.add_argument("--duplicates", help="高级覆盖：duplicates 输出目录")
     parser.add_argument("--rejects", help="高级覆盖：rejects 输出目录")
-    parser.add_argument("--event-output", help="高级覆盖：event_input 输出目录")
     parser.add_argument("--state", help="高级覆盖：state 目录")
     parser.add_argument("--payload-dir", help="高级覆盖：payload 目录")
     parser.add_argument("--final-state-dir", help="高级覆盖：最终保存 state 的目录")
@@ -70,7 +69,7 @@ def add_cleaning_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--near-threshold", type=positive_float, help=argparse.SUPPRESS)
     parser.add_argument("--near-fuzzy-threshold", type=positive_float, help=argparse.SUPPRESS)
     parser.add_argument("--no-near-dedup", action="store_true", help=argparse.SUPPRESS)
-    parser.add_argument("--write-aux-outputs", action="store_true", help="写出 duplicates/rejects/event_input 辅助文件")
+    parser.add_argument("--write-aux-outputs", action="store_true", help="写出 duplicates/rejects 辅助文件")
     parser.add_argument("--force", action="store_true", help="强制重跑已完成的 batch")
     parser.add_argument("--export-only", action="store_true", help="兼容别名：等同 export 命令")
     parser.add_argument("--reset-state", action="store_true", help="兼容别名：等同 fresh 命令")
@@ -86,8 +85,6 @@ def config_from_args(args: argparse.Namespace, base: PipelineConfig = DEFAULT_CO
         path_updates["duplicates_dir"] = Path(args.duplicates)
     if args.rejects:
         path_updates["rejects_dir"] = Path(args.rejects)
-    if args.event_output:
-        path_updates["event_dir"] = Path(args.event_output)
     if args.state:
         path_updates["state_dir"] = Path(args.state)
     if args.payload_dir:

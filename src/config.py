@@ -14,7 +14,6 @@ INPUT_DIR = "/mnt/ainvest_content/v1"  # 原始 NDJSON 输入目录
 CLEANED_DIR = "/mnt/ainvest_content/v3/v1"  # 审计格式 canonical 输出
 DUPLICATES_DIR = "output/duplicates"  # 重复记录输出（默认不写）
 REJECTS_DIR = "output/rejects"  # 被拒绝的原始行（默认不写）
-EVENT_DIR = "output/event_input"  # 事件抽取输入（默认不写）
 STATE_DIR = "/tmp/aime_event/v1/state"  # 运行中 SQLite 状态库，放本地盘减少 Ceph 随机 IO
 PAYLOAD_DIR = "/tmp/aime_event/v1/state/payloads"  # 运行中 payload 分片，放本地盘减少 Ceph 随机 IO
 FINAL_STATE_DIR = "/mnt/ainvest_content/v3/v1/state"  # 运行结束后保存的最终 state
@@ -81,7 +80,6 @@ class PathsConfig:
     cleaned_dir: Path = field(default_factory=lambda: Path(CLEANED_DIR))
     duplicates_dir: Path = field(default_factory=lambda: Path(DUPLICATES_DIR))
     rejects_dir: Path = field(default_factory=lambda: Path(REJECTS_DIR))
-    event_dir: Path = field(default_factory=lambda: Path(EVENT_DIR))
     state_dir: Path = field(default_factory=lambda: Path(STATE_DIR))
     payload_dir: Path = field(default_factory=lambda: Path(PAYLOAD_DIR))
     final_state_dir: Path = field(default_factory=lambda: Path(FINAL_STATE_DIR))
