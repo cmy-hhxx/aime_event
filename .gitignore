@@ -25,6 +25,7 @@ build/
 *~
 .superpowers/
 Event_datasets/
+.claude/
 
 # OS
 .DS_Store
