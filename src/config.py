@@ -1,7 +1,14 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+
+from dotenv import load_dotenv
+
+# 加载项目根 .env, 让 EVENT_V1_DIR/V2_DIR/OUT_ROOT 等可写在 .env 里
+# (load_dotenv 默认不覆盖已有环境变量, 因此 shell 里的 export 仍然优先)
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 DEFAULT_PAYLOAD_PART_BYTES = 512 * 1024 * 1024
 
@@ -46,9 +53,11 @@ NEAR_MAX_CANDIDATE_PAIRS = 1_000_000  # 近似去重候选对上限
 NEAR_MAX_REPORT_PAIRS = 10_000  # near_duplicates.jsonl 最多写入对数
 
 # --- eventpack: 事件训练包流水线 (extract/complete 阶段) ---
-EVENT_V1_DIR = "/mnt/ainvest_content/v3/v1"  # 清洗后新闻语料(仅精确去重)
-EVENT_V2_DIR = "/mnt/ainvest_content/v3/v2"  # 研报/电话会段落
-EVENT_OUT_ROOT = "/mnt/ainvest_content/v3/event_dataset"
+# 三个根目录支持环境变量覆盖: 本地开发时 export EVENT_V1_DIR/V2_DIR/OUT_ROOT
+# 指向下载的窗口子集即可, 不改这里的默认值(服务器全量跑不受影响)
+EVENT_V1_DIR = os.environ.get("EVENT_V1_DIR", "/mnt/ainvest_content/v3/v1")  # 清洗后新闻语料(仅精确去重)
+EVENT_V2_DIR = os.environ.get("EVENT_V2_DIR", "/mnt/ainvest_content/v3/v2")  # 研报/电话会段落
+EVENT_OUT_ROOT = os.environ.get("EVENT_OUT_ROOT", "/mnt/ainvest_content/v3/event_dataset")
 EVENT_INDEX_DIR = f"{EVENT_OUT_ROOT}/index"
 EVENT_CANDIDATE_DIR = f"{EVENT_OUT_ROOT}/candidates"
 EVENT_SELECTED_DIR = f"{EVENT_OUT_ROOT}/selected"

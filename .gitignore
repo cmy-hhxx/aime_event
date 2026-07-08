@@ -8,6 +8,7 @@ __pycache__/
 *.py[cod]
 *.pyo
 *.so
+.pytest_cache/
 .venv/
 venv/
 env/
@@ -22,6 +23,8 @@ build/
 *.swp
 *.swo
 *~
+.superpowers/
+Event_datasets/
 
 # OS
 .DS_Store
