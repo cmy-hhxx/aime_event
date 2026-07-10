@@ -95,6 +95,28 @@ MACRO_TAGS = frozenset({"CentralBanking", "Monetary Policy", "Trade Agreements",
 SYMBOL_RE = re.compile(r"^[A-Z][A-Z0-9.\-]{0,5}$")
 DATE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})")
 
+# ---------------- 模板骨架(与 template_miner 共享) ----------------
+CAPWORD = re.compile(r"^[A-Z][A-Za-z.&'’\-]*$|^[A-Z0-9.\-]{2,8}$")
+
+
+def skeleton(title: str) -> tuple:
+    """掩码标题 -> (骨架, 主体元组). 含数字 token -> '#', 连续大写词串折叠为 '@'."""
+    toks, subs, prev_at = [], [], False
+    for w in title.split():
+        ws = w.strip("(),:;\"'“”|")
+        if any(ch.isdigit() for ch in ws):
+            toks.append("#")
+            prev_at = False
+        elif ws and CAPWORD.match(ws):
+            if not prev_at:
+                toks.append("@")
+            subs.append(ws.lower())
+            prev_at = True
+        else:
+            toks.append(ws.lower())
+            prev_at = False
+    return " ".join(toks), tuple(subs)
+
 STOP = frozenset("""a an the of for to in on at as and or with by from is are was were be been its it this
 that after amid over under up down new says said report reports stock stocks shares share price prices
 market markets today week""".split())
@@ -111,8 +133,11 @@ def tokens(title: str) -> frozenset:
     return frozenset(t for t in TOKEN_RE.findall(title.lower()) if t not in STOP and len(t) > 1)
 
 
-def pass_a(v1_dir: str, tmpdir: str) -> dict:
-    """逐条过滤, 每层计数; 幸存者写入池文件."""
+def pass_a(v1_dir: str, tmpdir: str, templates: set | None = None) -> dict:
+    """逐条过滤, 每层计数; 幸存者写入池文件.
+
+    templates: template_miner 挖出的模板骨架集合, 作 L3b 数据驱动过滤层.
+    """
     os.makedirs(tmpdir, exist_ok=True)
     funnel: dict = {}
     pool_path = os.path.join(tmpdir, "pool.jsonl")
@@ -152,6 +177,11 @@ def pass_a(v1_dir: str, tmpdir: str) -> dict:
                         c[f"L3_drop_{hit}"] += 1
                         continue
                     c["L3_pass"] += 1
+
+                    if templates and skeleton(title)[0] in templates:
+                        c["L3b_drop_template_mined"] += 1
+                        continue
+                    c["L3b_pass"] += 1
 
                     # 正文/标题长度准入: body>=200 或 标题够长(FLASH 一句话准入)
                     body_len = len(r.get("body") or "")
@@ -409,11 +439,18 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--skip-a", action="store_true", help="复用已有 pool.jsonl")
     ap.add_argument("--dump", default=None, help="把 size>=5 簇(含采样标题)落盘到此路径供审计")
+    ap.add_argument("--templates", default=None,
+                    help="template_miner 产出的模板骨架文件, 作 L3b 数据驱动过滤层")
     args = ap.parse_args()
+
+    templates = None
+    if args.templates:
+        templates = {line.rstrip("\n") for line in open(args.templates) if line.strip()}
+        print(f"[main] loaded {len(templates)} mined templates", flush=True)
 
     result = {}
     if not args.skip_a:
-        result["funnel"] = pass_a(args.v1_dir, args.tmpdir)
+        result["funnel"] = pass_a(args.v1_dir, args.tmpdir, templates=templates)
     else:
         prev = json.load(open(args.out))
         result["funnel"] = prev.get("funnel", {})

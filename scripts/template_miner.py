@@ -13,51 +13,35 @@
   3. 漂移 = T2 中 T1 没有的新模板及其 H2 命中量
   4. 与手写 L3 正则在 H2 上的杀伤对比(重叠/互补)
 
-用法: python3 scripts/template_miner.py --v1-dir data/export_2025-07-08/v1 --out <json> [--dump-dir <dir>]
+用法:
+  生产(全窗口挖模板, 产物喂给 funnel_experiment --templates):
+    python3 scripts/template_miner.py --v1-dir <dir> --mode mine --emit templates.txt --out <json>
+  泛化实验(H1 挖 H2 验证):
+    python3 scripts/template_miner.py --v1-dir <dir> --mode holdout --out <json> [--dump-dir <dir>]
 """
 from __future__ import annotations
 
 import argparse
 import json
 import os
-import re
 import sys
 import time
 from collections import Counter, defaultdict
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import funnel_experiment as fe  # 复用 L1/L2 判定与 L3 手写规则
+import funnel_experiment as fe  # 复用 skeleton / L1 判定 / L3 手写规则
 
-H1_END = "2026-01-01"  # H1: < 此日期; H2: >= 此日期
+skeleton = fe.skeleton
 
-CAPWORD = re.compile(r"^[A-Z][A-Za-z.&'’\-]*$|^[A-Z0-9.\-]{2,8}$")  # 首大写词 或 ticker 样
+H1_END = "2026-01-01"  # holdout 模式: H1 < 此日期 <= H2
 MIN_COUNT = 20        # 模板骨架最小出现次数
 MIN_SUBJECTS = 10     # 最少不同主体
 MIN_SRC_SHARE = 0.6   # 头部来源占比下限(模板流来自单一自动化栏目)
 MIN_FIXED = 3         # 骨架中至少几个未被掩码的固定词
 
 
-def skeleton(title: str) -> tuple[str, tuple]:
-    """掩码标题 -> (骨架, 主体元组). 连续大写词折叠为一个 '@'."""
-    toks, subs, prev_at = [], [], False
-    for w in title.split():
-        ws = w.strip("(),:;\"'“”|")
-        if any(ch.isdigit() for ch in ws):
-            toks.append("#")
-            prev_at = False
-        elif ws and CAPWORD.match(ws):
-            if not prev_at:
-                toks.append("@")
-            subs.append(ws.lower())
-            prev_at = True
-        else:
-            toks.append(ws.lower())
-            prev_at = False
-    return " ".join(toks), tuple(subs)
-
-
-def iter_records(v1_dir: str):
-    """产出 (half, src_name, title). 仅 L1 有效记录(有标题有日期)."""
+def iter_records(v1_dir: str, split: bool = True):
+    """产出 (half, src_name, title). 仅 L1 有效记录(有标题有日期). split=False 时全归 H1."""
     for src in ("US_FLASH", "US_NEWS"):
         path = os.path.join(v1_dir, f"{src}.jsonl")
         with open(path) as fh:
@@ -70,8 +54,46 @@ def iter_records(v1_dir: str):
                 m = fe.DATE_RE.match(r.get("published_at") or "")
                 if not title or not m:
                     continue
-                half = "H1" if m.group(1) < H1_END else "H2"
+                half = "H1" if (not split or m.group(1) < H1_END) else "H2"
                 yield half, ((r.get("source") or {}).get("name") or ""), title
+
+
+def mine_full(v1_dir: str, emit: str) -> dict:
+    """生产模式: 全窗口挖模板, 写骨架文件(每行一个)供 funnel_experiment --templates 使用."""
+    t0 = time.time()
+    freq: Counter = Counter()
+    for _, _, title in iter_records(v1_dir, split=False):
+        freq[skeleton(title)[0]] += 1
+    cand = {sk for sk, c in freq.items() if c >= MIN_COUNT}
+    print(f"[p1] skeletons={len(freq)} candidates={len(cand)} ({time.time()-t0:.0f}s)", flush=True)
+
+    detail: dict = defaultdict(lambda: [set(), Counter()])
+    for _, src_name, title in iter_records(v1_dir, split=False):
+        sk, subs = skeleton(title)
+        if sk in cand:
+            d = detail[sk]
+            if len(d[0]) < 60:
+                d[0].add(subs)
+            d[1][src_name] += 1
+
+    templates = set()
+    for sk, (subs, srcs) in detail.items():
+        if len(subs) < MIN_SUBJECTS:
+            continue
+        if sum(1 for t in sk.split() if t not in ("#", "@")) < MIN_FIXED:
+            continue
+        if max(srcs.values()) / freq[sk] < MIN_SRC_SHARE:
+            continue
+        templates.add(sk)
+    with open(emit, "w") as f:
+        for sk in sorted(templates, key=lambda s: -freq[s]):
+            f.write(sk + "\n")
+    covered = sum(freq[sk] for sk in templates)
+    print(f"[mine_full] {len(templates)} templates, 覆盖 {covered} 条 -> {emit} "
+          f"({time.time()-t0:.0f}s)", flush=True)
+    return {"mode": "mine", "templates": len(templates), "records_covered": covered,
+            "emit": emit, "config": {"MIN_COUNT": MIN_COUNT, "MIN_SUBJECTS": MIN_SUBJECTS,
+                                     "MIN_SRC_SHARE": MIN_SRC_SHARE, "MIN_FIXED": MIN_FIXED}}
 
 
 def mine(v1_dir: str, dump_dir: str | None):
@@ -170,12 +192,19 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--v1-dir", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--mode", choices=("holdout", "mine"), default="holdout")
+    ap.add_argument("--emit", default=None, help="mine 模式: 模板骨架输出文件")
     ap.add_argument("--dump-dir", default=None)
     args = ap.parse_args()
-    result = mine(args.v1_dir, args.dump_dir)
+    if args.mode == "mine":
+        if not args.emit:
+            ap.error("--mode mine 需要 --emit")
+        result = mine_full(args.v1_dir, args.emit)
+    else:
+        result = mine(args.v1_dir, args.dump_dir)
+        print(json.dumps(result["eval_on_H2"], ensure_ascii=False, indent=1))
     with open(args.out, "w") as f:
         json.dump(result, f, ensure_ascii=False, indent=1)
-    print(json.dumps(result["eval_on_H2"], ensure_ascii=False, indent=1))
 
 
 if __name__ == "__main__":
