@@ -260,7 +260,7 @@ def dt_days(d1: str, d2: str) -> int:
     return abs((_dt.date(y2, m2, dd2) - _dt.date(y1, m1, dd1)).days)
 
 
-def pass_b(tmpdir: str) -> dict:
+def pass_b(tmpdir: str, dump_path: str | None = None) -> dict:
     """分桶聚类 + 跨桶合并 + 阈值扫描.
 
     macro 记录用主题桶; general 记录(本导出无个股实体, 无法按 symbol 分桶)
@@ -295,6 +295,7 @@ def pass_b(tmpdir: str) -> dict:
     # 桶内聚类
     cluster_members: dict = defaultdict(set)   # gcid -> set(record id)
     cluster_meta: dict = {}                    # gcid -> (bucket, track, sample_title, dates)
+    cluster_titles: dict = defaultdict(list)   # gcid -> 采样标题(供审计 dump)
     n_done = 0
     for b, rows in buckets.items():
         is_general = not b.startswith("macro_")
@@ -303,6 +304,8 @@ def pass_b(tmpdir: str) -> dict:
         for lab, r in zip(labels, rows):
             gcid = f"{b}::{lab}"
             cluster_members[gcid].add(r["id"])
+            if dump_path and len(cluster_titles[gcid]) < 8:
+                cluster_titles[gcid].append(f'[{r["date"]}|{r["src"][3:]}] {r["title"][:130]}')
             if gcid not in cluster_meta:
                 cluster_meta[gcid] = {"bucket": b, "track": track, "title": r["title"],
                                       "d0": r["date"], "d1": r["date"]}
@@ -356,6 +359,22 @@ def pass_b(tmpdir: str) -> dict:
     for s in sizes.values():
         dist["1" if s == 1 else "2" if s == 2 else "3-4" if s <= 4 else
              "5-9" if s <= 9 else "10-49" if s <= 49 else "50-199" if s <= 199 else "200+"] += 1
+    if dump_path:
+        root_titles: dict = defaultdict(list)  # 一遍聚合: 根簇 -> 采样标题
+        for g2, ts in cluster_titles.items():
+            root = gcids[dsu.find(idx[g2])]
+            if len(root_titles[root]) < 8:
+                root_titles[root].extend(ts[: 8 - len(root_titles[root])])
+        with open(dump_path, "w") as f:
+            for g, mem in merged.items():
+                if len(mem) < 5:
+                    continue
+                m = merged_meta[g]
+                f.write(json.dumps({"size": len(mem), "track": m["track"], "bucket": m["bucket"],
+                                    "span": f'{m["d0"]}..{m["d1"]}', "titles": root_titles.get(g, [])},
+                                   ensure_ascii=False) + "\n")
+        print(f"[pass_b] dumped size>=5 clusters -> {dump_path}", flush=True)
+
     dist["1"] += n_solo
     # 链化诊断: size>=5 的簇中时间跨度 >7 天的占比(真事件报道应集中在几天内)
     spans = [dt_days(merged_meta[g]["d0"], merged_meta[g]["d1"])
@@ -386,6 +405,7 @@ def main():
     ap.add_argument("--tmpdir", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--skip-a", action="store_true", help="复用已有 pool.jsonl")
+    ap.add_argument("--dump", default=None, help="把 size>=5 簇(含采样标题)落盘到此路径供审计")
     args = ap.parse_args()
 
     result = {}
@@ -394,7 +414,7 @@ def main():
     else:
         prev = json.load(open(args.out))
         result["funnel"] = prev.get("funnel", {})
-    result["clustering"] = pass_b(args.tmpdir)
+    result["clustering"] = pass_b(args.tmpdir, dump_path=args.dump)
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     with open(args.out, "w") as f:
         json.dump(result, f, ensure_ascii=False, indent=1)
