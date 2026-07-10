@@ -33,16 +33,32 @@ R_DATA_PRINT = re.compile(
     r"shares? (traded|change hands) in a block|yield on)\b", re.I)
 R_PRICE_MOVE = re.compile(
     r"\b(shares? (rise|rose|fall|fell|surge|drop|climb|slip|jump|gain|extend)|"
-    r"stock (rises?|falls?|surges?|drops?|jumps?)|"
+    r"stock (rises?|falls?|surges?|drops?|jumps?|surged|fell|jumped|dropped|soared|plunged)|"
     r"index (rose|fell|rises|falls|gains|drops)|"
     r"futures (are )?(steady|higher|lower|rise|fall|point)|"
-    r"(rises?|falls?|drops?|gains?|climbs?|slides?|up|down) \d+(\.\d+)?%)\b", re.I)
+    r"why .{0,40}(stock|shares) (surged|soared|fell|rose|dropped|jumped|plunged|moved|is (up|down))|"
+    r"(rises?|falls?|drops?|gains?|climbs?|slides?|surged?|soar(s|ed)?|plunged?|tumbled?|jumped|slipped|up|down) "
+    r"(over |more than |nearly |about )?\d+(\.\d+)?%)\b", re.I)
 R_RECAP = re.compile(
     r"\b(stock market today|market today|pre-?market|after-?hours|most active|"
     r"week ahead|wall street (brunch|breakfast)|daily (turnover|recap)|"
     r"top analyst (forecasts|calls)|things to know|what to watch|morning (bid|brief))\b", re.I)
+# 评级/例行 PR/垃圾模板(第二轮迭代新增: 首轮 top25 暴露的模板链)
+R_ANALYST = re.compile(
+    r"\b((maintains?|reiterates?|initiates?|resumes?|keeps?) .{0,50}"
+    r"(rating|recommendation|coverage|outperform|underperform|neutral|overweight|underweight|buy|sell|hold)|"
+    r"price target (raised|lowered|cut|to \$)|"
+    r"(fitch|moody'?s|s&p( global)?) (affirms?|assigns?|revises?|places?|withdraws?))\b", re.I)
+R_ROUTINE_PR = re.compile(
+    r"\b(to (participate|present|speak) (in|at)|presents? at .{0,50}conference|"
+    r"conference call|webcast|fireside chat|investor (day|conference)|annual meeting of (stock|share)holders)\b", re.I)
+R_JUNK = re.compile(
+    r"(\bhoroscope\b|word of the day|\bcrossword\b|\bwordle\b|\brecipe\b|"
+    r"^table:|earnings summary table|\brev nt\$|"
+    r"how much \$?\d+ invested|gf score|golden cross|marubozu|\bkdj\b|death cross)", re.I)
 
-HARD_RULES = [("data_print", R_DATA_PRINT), ("price_move", R_PRICE_MOVE), ("recap", R_RECAP)]
+HARD_RULES = [("data_print", R_DATA_PRINT), ("price_move", R_PRICE_MOVE), ("recap", R_RECAP),
+              ("analyst_rating", R_ANALYST), ("routine_pr", R_ROUTINE_PR), ("junk_template", R_JUNK)]
 
 # 宏观主题桶(现有 5 类 + 方案新增 5 类)
 MACRO_TOPICS = {
@@ -192,8 +208,16 @@ class DSU:
             self.p[rb] = ra
 
 
-def cluster_bucket(rows: list) -> list:
-    """桶内 3 天滑窗 + Jaccard 预筛 + token_set_ratio 连边; 返回 cluster 标号列表."""
+RARE_DF_MAX = 2000  # general 轨连边须共享至少一个 df<=此值 的"主体词", 防模板链
+
+
+def cluster_bucket(rows: list, df: Counter | None = None, require_rare: bool = False) -> list:
+    """桶内 3 天滑窗 + Jaccard 预筛 + token_set_ratio 连边; 返回 cluster 标号列表.
+
+    require_rare: 连边额外要求共享 >=1 个稀有 token(主体词锚定).
+    首轮实验教训: 无主体锚定时, "Why X Stock Surged Today" 这类模板标题会把
+    不同公司经传递闭包链成万条级巨簇.
+    """
     rows.sort(key=lambda r: r["date"])
     toks = [r.get("toks") or tokens(r["title"]) for r in rows]
     dsu = DSU(len(rows))
@@ -206,8 +230,10 @@ def cluster_bucket(rows: list) -> list:
             ti, tj = toks[i], toks[j]
             if not ti or not tj:
                 continue
-            inter = len(ti & tj)
-            if inter / max(1, len(ti | tj)) < JACCARD_MIN:
+            shared = ti & tj
+            if len(shared) / max(1, len(ti | tj)) < JACCARD_MIN:
+                continue
+            if require_rare and df is not None and not any(df[t] <= RARE_DF_MAX for t in shared):
                 continue
             if fuzz.token_set_ratio(rows[i]["title"].lower(), rows[j]["title"].lower()) >= TOKEN_SET_MIN:
                 dsu.union(i, j)
@@ -258,8 +284,9 @@ def pass_b(tmpdir: str) -> dict:
     cluster_meta: dict = {}                    # gcid -> (bucket, track, sample_title, dates)
     n_done = 0
     for b, rows in buckets.items():
-        labels = cluster_bucket(rows)
-        track = "macro" if b.startswith("macro_") else "general"
+        is_general = not b.startswith("macro_")
+        labels = cluster_bucket(rows, df=df, require_rare=is_general)
+        track = "general" if is_general else "macro"
         for lab, r in zip(labels, rows):
             gcid = f"{b}::{lab}"
             cluster_members[gcid].add(r["id"])
@@ -317,6 +344,12 @@ def pass_b(tmpdir: str) -> dict:
         dist["1" if s == 1 else "2" if s == 2 else "3-4" if s <= 4 else
              "5-9" if s <= 9 else "10-49" if s <= 49 else "50-199" if s <= 199 else "200+"] += 1
     dist["1"] += n_solo
+    # 链化诊断: size>=5 的簇中时间跨度 >7 天的占比(真事件报道应集中在几天内)
+    spans = [dt_days(merged_meta[g]["d0"], merged_meta[g]["d1"])
+             for g, s in sizes.items() if s >= 5]
+    chain_stat = {"n_size5plus": len(spans),
+                  "span_gt7d": sum(1 for s in spans if s > 7),
+                  "span_gt30d": sum(1 for s in spans if s > 30)}
     sweep = {}
     for k in (2, 3, 5, 8):
         ok = [g for g, s in sizes.items() if s >= k]
@@ -330,7 +363,8 @@ def pass_b(tmpdir: str) -> dict:
                  "span": f'{merged_meta[g]["d0"]}..{merged_meta[g]["d1"]}',
                  "title": merged_meta[g]["title"][:110]} for g, s in top]
     return {"n_clusters": len(merged) + n_solo, "n_solo_singletons": n_solo,
-            "size_dist": dict(dist), "sweep": sweep, "top25": top_view}
+            "size_dist": dict(dist), "chain_stat": chain_stat,
+            "sweep": sweep, "top25": top_view}
 
 
 def main():
