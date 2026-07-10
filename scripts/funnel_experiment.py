@@ -221,7 +221,8 @@ class DSU:
             self.p[rb] = ra
 
 
-RARE_DF_MAX = 2000  # general 轨连边须共享至少一个 df<=此值 的"主体词", 防模板链
+RARE_DF_RATIO = 0.0014  # 稀有词阈值 = 池大小 * 此比例(本导出 145 万池 ≈ 2000), 跨语料自适应
+_RARE_DF_MAX = [2000]   # 运行时由 pass_b 按池大小设定
 
 
 def cluster_bucket(rows: list, df: Counter | None = None, require_rare: bool = False) -> list:
@@ -246,7 +247,7 @@ def cluster_bucket(rows: list, df: Counter | None = None, require_rare: bool = F
             shared = ti & tj
             if len(shared) / max(1, len(ti | tj)) < JACCARD_MIN:
                 continue
-            if require_rare and df is not None and not any(df[t] <= RARE_DF_MAX for t in shared):
+            if require_rare and df is not None and not any(df[t] <= _RARE_DF_MAX[0] for t in shared):
                 continue
             if fuzz.token_set_ratio(rows[i]["title"].lower(), rows[j]["title"].lower()) >= TOKEN_SET_MIN:
                 dsu.union(i, j)
@@ -275,7 +276,9 @@ def pass_b(tmpdir: str, dump_path: str | None = None) -> dict:
             r["toks"] = tokens(r["title"])
             rows_all.append(r)
             df.update(r["toks"])
-    print(f"[pass_b] pool {len(rows_all)} records, {len(df)} tokens ({time.time()-t0:.0f}s)", flush=True)
+    _RARE_DF_MAX[0] = max(200, int(len(rows_all) * RARE_DF_RATIO))
+    print(f"[pass_b] pool {len(rows_all)} records, {len(df)} tokens, "
+          f"rare_df_max={_RARE_DF_MAX[0]} ({time.time()-t0:.0f}s)", flush=True)
 
     buckets: dict = defaultdict(list)
     solo: list = []  # 全部 token df=1 -> 不可能与任何行共词, 必为单例簇

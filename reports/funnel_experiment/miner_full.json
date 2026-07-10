@@ -1,0 +1,172 @@
+{
+ "config": {
+  "MIN_COUNT": 20,
+  "MIN_SUBJECTS": 10,
+  "MIN_SRC_SHARE": 0.6,
+  "MIN_FIXED": 3,
+  "H1_END": "2026-01-01"
+ },
+ "templates": {
+  "H1": 411,
+  "H2": 419,
+  "shared": 219,
+  "drift_new_in_H2": 200
+ },
+ "eval_on_H2": {
+  "n_records": 1072540,
+  "killed_by_T1(跨期)": 24063,
+  "killed_by_T2(oracle)": 29326,
+  "跨期保持率": 0.821,
+  "killed_by_hand_regex": 207480,
+  "T1∩regex": 12778,
+  "regex独有": 194702,
+  "T1独有": 11285,
+  "drift模板的H2命中": 7582
+ },
+ "top_drift_templates": [
+  {
+   "skeleton": "@ raises target price to # from #",
+   "h2_hits": 309
+  },
+  {
+   "skeleton": "@ cuts target price to # from #",
+   "h2_hits": 198
+  },
+  {
+   "skeleton": "@ of the day @",
+   "h2_hits": 194
+  },
+  {
+   "skeleton": "@ sees # revenue # to # estimated #",
+   "h2_hits": 153
+  },
+  {
+   "skeleton": "@ vs. @ a @ in #",
+   "h2_hits": 152
+  },
+  {
+   "skeleton": "@ announces completion of a periodic review of ratings of @",
+   "h2_hits": 131
+  },
+  {
+   "skeleton": "@ final dividend/share # @ cents",
+   "h2_hits": 130
+  },
+  {
+   "skeleton": "@ net income # yuan est. # yuan",
+   "h2_hits": 124
+  },
+  {
+   "skeleton": "@ net income # yuan",
+   "h2_hits": 116
+  },
+  {
+   "skeleton": "@ raises target price to @ # from @ #",
+   "h2_hits": 113
+  },
+  {
+   "skeleton": "@ index falls # to # at open",
+   "h2_hits": 96
+  },
+  {
+   "skeleton": "@ to buy back up to # billion yen of shares",
+   "h2_hits": 95
+  },
+  {
+   "skeleton": "@ of @ at @ by @",
+   "h2_hits": 84
+  },
+  {
+   "skeleton": "@ raises target price to # from # for @",
+   "h2_hits": 82
+  },
+  {
+   "skeleton": "@ # adj. oper income # est. #",
+   "h2_hits": 80
+  }
+ ],
+ "samples_killed_by_T1_in_H2": [
+  "Coal India has 3M shares traded in a block",
+  "Global funds buy net INR1.43B of India stocks on NSE Jan. 6",
+  "Arbeit-Times to cancel 3.51% of shares on Jan 16",
+  "Malaysia’s KLCI index rises 1% to 1,686.54",
+  "Needham raises Taiwan Semiconductor Manufacturing target price to $410 from $360",
+  "Hypoport falls 8.6% on Tradegate vs Xetra close",
+  "Italy Nov. current account deficit EUR1,333B",
+  "Nymex nat gas Feb. futures settle at $4.8750/MMBTU",
+  "Hero MotoCorp 30 other income 2.96B rupees, -6.8 y/y",
+  "Hanwha Systems 4Q net 18.53B won, est. 40.1B won",
+  "Zimmer Biomet 4Q net sales $2.24B, est. $2.22B",
+  "Secured overnight financing rate: 3.63% February 9th vs 3.64% February 6th",
+  "Brazil to auction up to 50,000 FX swaps Feb. 11",
+  "Fitch affirms Iowa’s IDR at AAA; outlook stable",
+  "First Farmers Financial announces $4M share buyback",
+  "Wyndham Hotels 4Q net revenue $334M, estimate $337.5",
+  "Alsea 4Q net income MXN650.2M, est. MXN797M",
+  "Belgium Feb. consumer prices rise 1.45% y/y",
+  "Gildan Activewear 4Q net sales $1.08B, est. $957.5M",
+  "Mara Holdings 4Q total revenue $202.3M, estimated $252.2M",
+  "Helios Technologies 4Q net sales $210.7M, est. $197.2M",
+  "Philippines Feb. consumer prices rise 2.4% y/y; est. +2.4%",
+  "Yuzhou Group YTD contracted sales 892M yuan",
+  "PRG sees FY revenue $2.95B to $3.07B, saw $3.02B to $3.14B",
+  "ICE gasoil March futures settle at $1,042.50 a ton",
+  "Micro-Star Int'l FY net income NT$5.75B, est. NT$5.51B",
+  "South Korea's Kospi index rises 4% to 5,867.03",
+  "Santander-Chile Bank shares rise over 10% pre-market, currently trading at $34.67.",
+  "Super Micro Computer, Inc. shares fall over 20% pre-market, currently trading at $24.46.",
+  "Fitch affirms Fibra Mty at 'BBB-'; outlook stable",
+  "South Korea's Kospi index rises 3.1% to 5,724.14",
+  "Fitch upgrades Grifols to 'BB-', outlook stable",
+  "Fitch affirms Jinan West City Investment, Development Group at 'BBB'; outlook stable",
+  "Lithuania Feb. industrial production rises 4.7% y/y",
+  "Cirtex Holdings suspends trading in Hong Kong",
+  "Marvell Technology, Inc. shares rise over 11% pre-market, currently trading at $97.49.",
+  "Patria Investments closes purchase of WP Global Partners",
+  "Ling Yui suspends trading in Hong Kong",
+  "NYMEX WTI crude May futures settle at $111.54 a barrel",
+  "Singapore's Straits Times rises 0.5% to 4,972.40 at close"
+ ],
+ "samples_drift": [
+  "Honasac Consumer completes acquisition of BTM Ventures",
+  "Alumis to offer stock",
+  "Taiwan's Taiex index falls 0.5% to 30,412.32 at open",
+  "Eli Lilly: Jefferies raises target price to $1,300 from $976",
+  "HDFC Bank has 11.8M shares traded in another block",
+  "Brazil Dec. consumer prices rise 0.33% m/m; est. +0.32%",
+  "Lithuania Dec. producer prices fall 3 y/y",
+  "Panama Nov. economic activity rises 4.37% y/y",
+  "Tailored Brands $400M TLB for refi: call Jan 14",
+  "Peru’s Lima Dec. unemployment rate 5%; est. 5.9%",
+  "France to sell 3.00% 2033 bonds on Jan 22",
+  "FG Imperii acquisition opens at $10.01, IPO at $10",
+  "SRF 3Q total costs 32.15B rupees",
+  "Rank One Computing files to offer 3M shares in IPO",
+  "German power for Jan. 21 settles at EUR 117.00 /MWh: EPEX",
+  "Hillenbrand $500M 7NC3 sr sec notes",
+  "Hasbro names Doug Bowser, Carla Vernon to board",
+  "Keikyu Corp stake falls to 4.6%: SM Trust",
+  "SCB X 40 net interest margin 3.24%",
+  "Netherlands Jan. consumer confidence falls to -23",
+  "Microsoft: Citigroup cuts target price to $660 from $690",
+  "Thailand Dec. trade deficit $352M; est. -$2.600B",
+  "BHG Group 40 adj gross margin 26.4%, est. 25.6%",
+  "CG Power 30 EBITDA margin 14.9% vs. 14.5% y/y",
+  "Northrop Grumman sees 2026 FCF $3.10B to $3.50B, est. $3.34B",
+  "Stolt-Nielsen sees 2026 adj. EBITDA $600M to $750M",
+  "TVS Motor 3Q revenue 124.8 billion rupees, estimate 121.13 billion rupees",
+  "AT&T sees 2026 adj EBITDA +3% to +4%",
+  "Halozyme sees 2026 revenue $1.71B to $1.81B, estimated $1.68B",
+  "Arcos Dorados sees 2026 capex $275M to $325M",
+  "IBM shares extend gain to 10%",
+  "WM 4Q operating revenue $6.31B, estimate $6.38B",
+  "Telia FY dividend share SEK2.05, estimated SEK2.04",
+  "Axfood 40 adj. oper profit SEK873M, est. SEK866.7M",
+  "Western Digital sees 3Q revenue $3.1B to $3.3B",
+  "Axera says trading expected to begin Feb. 10",
+  "Orion prices offering of stock",
+  "Tompkins QTR div 67.00c / shr, prior 65.00c regular cash",
+  "Sun Pharma 3Q revenue 155.2B rupees, estimate 147.92B rupees",
+  "Tata Motors PV Jan. vehicle sales 71,066 units"
+ ]
+}
