@@ -1,0 +1,255 @@
+{
+ "funnel": {
+  "US_FLASH": {
+   "L0_raw": 412144,
+   "L1_valid": 412144,
+   "L2_drop_tech_noise_tags": 27880,
+   "L2_pass": 384264,
+   "L3_pass": 327073,
+   "L4_admitted_by_title_only": 175530,
+   "L4_pass": 317091,
+   "L5_pass": 315847,
+   "L6_track_general": 279580,
+   "L6_pool_records": 315847,
+   "L4_drop_too_short": 9982,
+   "L6_macro_via_tags_gate": 13248,
+   "L6_track_macro": 36267,
+   "L3_drop_data_print": 47668,
+   "L6_has_stock_entities": 56424,
+   "L3_drop_price_move": 8530,
+   "L5_drop_exact_dup": 1244,
+   "L3_drop_recap": 993
+  },
+  "US_NEWS": {
+   "L0_raw": 1689381,
+   "L1_valid": 1689381,
+   "L2_drop_tech_noise_tags": 244586,
+   "L2_pass": 1444795,
+   "L3_pass": 1274775,
+   "L4_pass": 1245874,
+   "L5_pass": 1232575,
+   "L6_track_general": 1144594,
+   "L6_pool_records": 1232575,
+   "L6_track_macro": 87981,
+   "L6_macro_via_tags_gate": 32933,
+   "L4_drop_too_short": 28901,
+   "L4_admitted_by_title_only": 100462,
+   "L3_drop_data_print": 158058,
+   "L5_drop_exact_dup": 13299,
+   "L3_drop_recap": 3917,
+   "L3_drop_price_move": 8045
+  }
+ },
+ "clustering": {
+  "n_clusters": 1148760,
+  "n_solo_singletons": 2538,
+  "size_dist": {
+   "1": 1035393,
+   "3-4": 26358,
+   "5-9": 9996,
+   "200+": 52,
+   "2": 72851,
+   "10-49": 3842,
+   "50-199": 268
+  },
+  "sweep": {
+   "n>=2": {
+    "clusters": 113367,
+    "macro": 9713,
+    "general": 103654
+   },
+   "n>=3": {
+    "clusters": 40516,
+    "macro": 3387,
+    "general": 37129
+   },
+   "n>=5": {
+    "clusters": 14158,
+    "macro": 1187,
+    "general": 12971
+   },
+   "n>=8": {
+    "clusters": 6179,
+    "macro": 540,
+    "general": 5639
+   }
+  },
+  "top25": [
+   {
+    "size": 53598,
+    "bucket": "g_surged",
+    "track": "general",
+    "span": "2025-12-29..2026-06-29",
+    "title": "Why Iamgold Stock Surged Today"
+   },
+   {
+    "size": 43873,
+    "bucket": "g_surged",
+    "track": "general",
+    "span": "2025-07-08..2026-01-01",
+    "title": "BONK surged over 8% in the past 2 hours, and its market cap is now at $20.43 billion."
+   },
+   {
+    "size": 7783,
+    "bucket": "g_diversified",
+    "track": "general",
+    "span": "2025-08-29..2026-01-03",
+    "title": "Mizuho Maintains Diversified Energy (DEC) Outperform Recommendation"
+   },
+   {
+    "size": 3179,
+    "bucket": "g_cnooc",
+    "track": "general",
+    "span": "2026-02-24..2026-06-29",
+    "title": "Fitch affirms CNOOC Limited at 'A'; outlook stable"
+   },
+   {
+    "size": 1411,
+    "bucket": "g_surged",
+    "track": "general",
+    "span": "2026-01-13..2026-05-11",
+    "title": "Deere Stock Has Surged 42% This Year. Why You Should Sell, Says Analyst. — Barrons.com"
+   },
+   {
+    "size": 1206,
+    "bucket": "g_residential",
+    "track": "general",
+    "span": "2025-08-27..2025-09-30",
+    "title": "Equity Residential to Participate in Bank of America 2025 Global Real Estate Conference"
+   },
+   {
+    "size": 1180,
+    "bucket": "g_actions",
+    "track": "general",
+    "span": "2025-08-05..2025-11-21",
+    "title": "Aries Horoscope Today, 11th September 2025: Focused actions bring clarity and growth."
+   },
+   {
+    "size": 971,
+    "bucket": "macro_tag_Regulation",
+    "track": "macro",
+    "span": "2025-10-20..2025-11-26",
+    "title": "Investar Holding Corporation Announces 2025 Third Quarter Results and Wichita Falls Bancshares, Inc. Transacti"
+   },
+   {
+    "size": 948,
+    "bucket": "g_12b",
+    "track": "general",
+    "span": "2026-03-02..2026-03-19",
+    "title": "Table: Chicony Power Technology Feb Rev NT$2.12B Vs NT$2.71B"
+   },
+   {
+    "size": 760,
+    "bucket": "g_monitoring",
+    "track": "general",
+    "span": "2025-07-08..2025-08-29",
+    "title": "AstraZeneca’s LYNPARZA Study: Monitoring Safety in Breast Cancer Treatment"
+   },
+   {
+    "size": 754,
+    "bucket": "g_transit",
+    "track": "general",
+    "span": "2026-05-11..2026-05-29",
+    "title": "Perak Transit Malaysia 1st-Quarter 2026 Earnings Summary Table"
+   },
+   {
+    "size": 718,
+    "bucket": "g_hynix",
+    "track": "general",
+    "span": "2025-12-04..2026-02-26",
+    "title": "SK hynix Showcases Next Generation AI Memory Innovation at CES 2026"
+   },
+   {
+    "size": 714,
+    "bucket": "g_closing",
+    "track": "general",
+    "span": "2026-05-26..2026-06-20",
+    "title": "Real Messenger Corporation announces closing of US$4.0 million public offering"
+   },
+   {
+    "size": 703,
+    "bucket": "g_transit",
+    "track": "general",
+    "span": "2026-02-20..2026-03-02",
+    "title": "Perak Transit Malaysia 4th-Quarter 2025 Earnings Summary Table"
+   },
+   {
+    "size": 655,
+    "bucket": "g_indicator",
+    "track": "general",
+    "span": "2026-04-15..2026-05-22",
+    "title": "Energous's 15min chart triggers KDJ Golden Cross, Bullish Marubozu indicator."
+   },
+   {
+    "size": 616,
+    "bucket": "g_agricultural",
+    "track": "general",
+    "span": "2026-06-09..2026-06-22",
+    "title": "Federal Agricultural Mortgage Corp (AGM.A) Stock Up 3.6% and Still Undervalued -- GF Score: 64/100"
+   },
+   {
+    "size": 607,
+    "bucket": "g_farmers",
+    "track": "general",
+    "span": "2025-07-08..2025-12-12",
+    "title": "Here's How Much $100 Invested In Sprouts Farmers Market 10 Years Ago Would Be Worth Today"
+   },
+   {
+    "size": 606,
+    "bucket": "g_french",
+    "track": "general",
+    "span": "2026-01-02..2026-06-08",
+    "title": "French Word of the Day: Exigeant"
+   },
+   {
+    "size": 581,
+    "bucket": "g_diversified",
+    "track": "general",
+    "span": "2026-02-17..2026-04-16",
+    "title": "Diversified Energy Files 8K - Operations And Financial Condition >DEC"
+   },
+   {
+    "size": 579,
+    "bucket": "g_residential",
+    "track": "general",
+    "span": "2026-03-02..2026-03-16",
+    "title": "Equity Residential (EQR) Presents at Citi's Miami Global Property CEO Conference 2026 Transcript"
+   },
+   {
+    "size": 445,
+    "bucket": "g_12b",
+    "track": "general",
+    "span": "2026-05-04..2026-05-14",
+    "title": "Table: Nanya Technology Apr Rev NT$25.49B Vs NT$3.12B"
+   },
+   {
+    "size": 436,
+    "bucket": "g_province",
+    "track": "general",
+    "span": "2026-02-28..2026-04-08",
+    "title": "13 members of Iran's Revolutionary Guards killed on Monday in U.S.-Israeli attacks on Kerman province - state "
+   },
+   {
+    "size": 433,
+    "bucket": "g_closing",
+    "track": "general",
+    "span": "2026-04-07..2026-04-28",
+    "title": "US stocks today: S&P 500, Nasdaq push to closing records on earnings and Middle East optimism"
+   },
+   {
+    "size": 432,
+    "bucket": "g_12b",
+    "track": "general",
+    "span": "2026-04-05..2026-04-10",
+    "title": "Table: FSP Technology Inc Mar Rev NT$1.01B Vs NT$1.12B"
+   },
+   {
+    "size": 421,
+    "bucket": "g_natural",
+    "track": "general",
+    "span": "2025-10-07..2025-11-29",
+    "title": "A Preview Of Natural Grocers's Earnings"
+   }
+  ]
+ }
+}

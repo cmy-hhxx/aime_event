@@ -1,0 +1,268 @@
+{
+ "funnel": {
+  "US_FLASH": {
+   "L0_raw": 412144,
+   "L1_valid": 412144,
+   "L2_drop_tech_noise_tags": 27880,
+   "L2_pass": 384264,
+   "L3_pass": 320014,
+   "L4_admitted_by_title_only": 172795,
+   "L4_pass": 310076,
+   "L5_pass": 308855,
+   "L6_track_general": 272669,
+   "L6_pool_records": 308855,
+   "L4_drop_too_short": 9938,
+   "L6_macro_via_tags_gate": 13189,
+   "L6_track_macro": 36186,
+   "L3_drop_data_print": 47882,
+   "L6_has_stock_entities": 53630,
+   "L3_drop_price_move": 8466,
+   "L5_drop_exact_dup": 1221,
+   "L3_drop_recap": 993,
+   "L3_drop_routine_pr": 365,
+   "L3_drop_holdings_flow": 19,
+   "L3_drop_analyst_rating": 6522,
+   "L3_drop_junk_template": 3
+  },
+  "US_NEWS": {
+   "L0_raw": 1689381,
+   "L1_valid": 1689381,
+   "L2_drop_tech_noise_tags": 244586,
+   "L2_pass": 1444795,
+   "L3_pass": 1182403,
+   "L4_pass": 1154405,
+   "L5_pass": 1141388,
+   "L6_track_general": 1055164,
+   "L6_pool_records": 1141388,
+   "L6_track_macro": 86224,
+   "L6_macro_via_tags_gate": 31301,
+   "L4_drop_too_short": 27998,
+   "L4_admitted_by_title_only": 79415,
+   "L3_drop_analyst_rating": 39798,
+   "L3_drop_data_print": 175016,
+   "L5_drop_exact_dup": 13017,
+   "L3_drop_holdings_flow": 10316,
+   "L3_drop_junk_template": 14724,
+   "L3_drop_recap": 3897,
+   "L3_drop_routine_pr": 9804,
+   "L3_drop_price_move": 8837
+  }
+ },
+ "clustering": {
+  "n_clusters": 1175157,
+  "n_solo_singletons": 2557,
+  "size_dist": {
+   "1": 1064805,
+   "3-4": 25436,
+   "5-9": 9467,
+   "2": 71731,
+   "200+": 27,
+   "50-199": 222,
+   "10-49": 3469
+  },
+  "chain_stat": {
+   "n_size5plus": 13185,
+   "span_gt7d": 1638,
+   "span_gt30d": 100
+  },
+  "sweep": {
+   "n>=2": {
+    "clusters": 110352,
+    "macro": 9687,
+    "general": 100665
+   },
+   "n>=3": {
+    "clusters": 38621,
+    "macro": 3378,
+    "general": 35243
+   },
+   "n>=5": {
+    "clusters": 13185,
+    "macro": 1183,
+    "general": 12002
+   },
+   "n>=8": {
+    "clusters": 5555,
+    "macro": 532,
+    "general": 5023
+   }
+  },
+  "top25": [
+   {
+    "size": 9159,
+    "bucket": "g_applications",
+    "track": "general",
+    "span": "2025-07-08..2025-09-04",
+    "title": "Joby Aviation, L3Harris to explore new aircraft class for defense applications"
+   },
+   {
+    "size": 2228,
+    "bucket": "g_farmers",
+    "track": "general",
+    "span": "2026-01-03..2026-04-03",
+    "title": "Sprouts Farmers Market (SFM): Goldman Sachs Lowers Price Target | SFM Stock News"
+   },
+   {
+    "size": 2203,
+    "bucket": "g_paper",
+    "track": "general",
+    "span": "2026-04-06..2026-06-29",
+    "title": "International Paper Raised to Buy From Neutral by Seaport Global"
+   },
+   {
+    "size": 915,
+    "bucket": "g_surged",
+    "track": "general",
+    "span": "2026-02-09..2026-02-25",
+    "title": "TYRES: Profitability surged in 2025, with 2026 guidance targeting higher sales and margins"
+   },
+   {
+    "size": 755,
+    "bucket": "g_monitoring",
+    "track": "general",
+    "span": "2025-07-08..2025-08-29",
+    "title": "AstraZeneca’s LYNPARZA Study: Monitoring Safety in Breast Cancer Treatment"
+   },
+   {
+    "size": 574,
+    "bucket": "g_diversified",
+    "track": "general",
+    "span": "2026-02-17..2026-04-16",
+    "title": "Diversified Energy Files 8K - Operations And Financial Condition >DEC"
+   },
+   {
+    "size": 426,
+    "bucket": "g_province",
+    "track": "general",
+    "span": "2026-02-28..2026-04-08",
+    "title": "13 members of Iran's Revolutionary Guards killed on Monday in U.S.-Israeli attacks on Kerman province - state "
+   },
+   {
+    "size": 406,
+    "bucket": "macro_regulation_policy",
+    "track": "macro",
+    "span": "2025-09-17..2025-10-13",
+    "title": "Chuck Schumer Says Trump Wants A Government Shutdown: 'He Doesn't Want To Do Anything About The Crisis He's Cr"
+   },
+   {
+    "size": 386,
+    "bucket": "g_08",
+    "track": "general",
+    "span": "2026-02-20..2026-04-03",
+    "title": "Hang Seng Tech Index Gives Up Opening Gains; Last 1.4% Lower at 5188.08"
+   },
+   {
+    "size": 377,
+    "bucket": "g_facilities",
+    "track": "general",
+    "span": "2026-04-14..2026-06-12",
+    "title": "Medical Facilities Corporation (DR:CA) Shareholder/Analyst Call Prepared Remarks Transcript"
+   },
+   {
+    "size": 365,
+    "bucket": "macro_trade_tariff",
+    "track": "macro",
+    "span": "2026-02-19..2026-03-02",
+    "title": "Trump on Supreme Court tariff ruling: I've been waiting forever"
+   },
+   {
+    "size": 321,
+    "bucket": "macro_trade_tariff",
+    "track": "macro",
+    "span": "2026-01-16..2026-01-30",
+    "title": "Trump: May put tariff on countries over Greenland"
+   },
+   {
+    "size": 285,
+    "bucket": "g_thailand",
+    "track": "general",
+    "span": "2026-02-10..2026-04-30",
+    "title": "Thailand's SET index opens little changed at 1,485.16"
+   },
+   {
+    "size": 277,
+    "bucket": "g_closing",
+    "track": "general",
+    "span": "2025-09-02..2025-09-24",
+    "title": "Picard Medical, Inc. Announces Closing of $17 Million Initial Public Offering"
+   },
+   {
+    "size": 242,
+    "bucket": "macro_trade_tariff",
+    "track": "macro",
+    "span": "2025-07-08..2025-07-16",
+    "title": "SCMP: Apparently impatient Trump slaps 25% tariffs on Japan, South Korea"
+   },
+   {
+    "size": 240,
+    "bucket": "g_way",
+    "track": "general",
+    "span": "2026-01-24..2026-04-03",
+    "title": "The Single Best Way to Invest $500 in Artificial Intelligence (AI) Right Now"
+   },
+   {
+    "size": 233,
+    "bucket": "macro_regulation_policy",
+    "track": "macro",
+    "span": "2025-11-04..2025-11-14",
+    "title": "The US Government Shutdown Enters Day 35, Tying the Record for the Longest Ever"
+   },
+   {
+    "size": 230,
+    "bucket": "g_indus",
+    "track": "general",
+    "span": "2025-11-07..2025-12-29",
+    "title": "PPG Indus (PPG) Receives Buy Rating and Price Target Increase from Citigroup | PPG Stock News"
+   },
+   {
+    "size": 230,
+    "bucket": "macro_geopolitical",
+    "track": "macro",
+    "span": "2026-04-04..2026-04-12",
+    "title": "Iran rejects US proposal for 48-hour ceasefire as tensions escalate: report"
+   },
+   {
+    "size": 226,
+    "bucket": "g_natural",
+    "track": "general",
+    "span": "2025-10-07..2025-11-29",
+    "title": "A Preview Of Natural Grocers's Earnings"
+   },
+   {
+    "size": 225,
+    "bucket": "g_asx",
+    "track": "general",
+    "span": "2026-02-24..2026-03-01",
+    "title": "SRG Global (ASX:SRG) Price Target Increased by 15.51% to 3.25"
+   },
+   {
+    "size": 225,
+    "bucket": "g_bolster",
+    "track": "general",
+    "span": "2025-08-04..2025-08-30",
+    "title": "LSEG Executes Share Buyback to Bolster Market Position"
+   },
+   {
+    "size": 221,
+    "bucket": "g_eg",
+    "track": "general",
+    "span": "2025-09-03..2025-10-31",
+    "title": "YieldBoost EG To 14.8% Using Options"
+   },
+   {
+    "size": 220,
+    "bucket": "g_natural",
+    "track": "general",
+    "span": "2026-04-21..2026-05-08",
+    "title": "Canadian Natural Resources declares CAD 0.625 dividend"
+   },
+   {
+    "size": 220,
+    "bucket": "g_waters",
+    "track": "general",
+    "span": "2026-06-02..2026-06-24",
+    "title": "Waters Corp Initiated at Neutral by Piper Sandler"
+   }
+  ]
+ }
+}

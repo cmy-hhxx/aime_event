@@ -30,7 +30,9 @@ R_DATA_PRINT = re.compile(
     r"\b([1-4]Q|Q[1-4]|[12]H|FY\d{2}|div/shr|est\.|y/y|m/m|q/q|allotted|"
     r"inventor(y|ies)|loss/share|loss per share|EPS|comp sales|net sales|"
     r"revenue \$?\d|profit \d|gross margin|NIC \d|"
-    r"shares? (traded|change hands) in a block|yield on)\b", re.I)
+    r"shares? (traded|change hands) in a block|yield on|"
+    r"(first|second|third|fourth)[- ]quarter (\d{4} )?(financial |fiscal )?(results|earnings)|"
+    r"reports? (first|second|third|fourth) quarter|financial results)\b", re.I)
 R_PRICE_MOVE = re.compile(
     r"\b(shares? (rise|rose|fall|fell|surge|drop|climb|slip|jump|gain|extend)|"
     r"stock (rises?|falls?|surges?|drops?|jumps?|surged|fell|jumped|dropped|soared|plunged)|"
@@ -47,18 +49,29 @@ R_RECAP = re.compile(
 R_ANALYST = re.compile(
     r"\b((maintains?|reiterates?|initiates?|resumes?|keeps?) .{0,50}"
     r"(rating|recommendation|coverage|outperform|underperform|neutral|overweight|underweight|buy|sell|hold)|"
-    r"price target (raised|lowered|cut|to \$)|"
-    r"(fitch|moody'?s|s&p( global)?) (affirms?|assigns?|revises?|places?|withdraws?))\b", re.I)
+    r"(is )?(maintained|reiterated|upgraded|downgraded) (at|by)|"
+    r"given '.{0,25}' rating|new analyst forecast|"
+    r"price target (raised|lowered|cut|maintained|to \$)|"
+    r"(fitch|moody'?s( ratings)?|s&p( global( ratings)?)?) .{0,12}"
+    r"(affirms?|assigns?|revises?|places?|withdraws?))\b", re.I)
 R_ROUTINE_PR = re.compile(
     r"\b(to (participate|present|speak) (in|at)|presents? at .{0,50}conference|"
-    r"conference call|webcast|fireside chat|investor (day|conference)|annual meeting of (stock|share)holders)\b", re.I)
+    r"conference call|webcast|fireside chat|investor (day|conference)|annual meeting of (stock|share)holders|"
+    r"resignation of (board|company) secretary|schedules? board meeting|board meeting to (review|approve)|"
+    r"annual general meeting|cash dividend on the way|declares? (quarterly|monthly) (cash )?dividend)\b", re.I)
+R_HOLDINGS = re.compile(
+    r"\b((buys?|sells?|adds?|trims?|boosts?|cuts?|acquires?) [\d,.]+ shares? of|"
+    r"13[fF] (filing|filer)|lobbying (update|disclosure)|"
+    r"(position|stake) (increased|decreased|boosted|trimmed|raised|lowered))\b", re.I)
 R_JUNK = re.compile(
     r"(\bhoroscope\b|word of the day|\bcrossword\b|\bwordle\b|\brecipe\b|"
     r"^table:|earnings summary table|\brev nt\$|"
-    r"how much \$?\d+ invested|gf score|golden cross|marubozu|\bkdj\b|death cross)", re.I)
+    r"how much \$?\d+ invested|if you (had )?invested \$?\d|gf (score|value)|-- gf |"
+    r"golden cross|marubozu|\bkdj\b|death cross)", re.I)
 
 HARD_RULES = [("data_print", R_DATA_PRINT), ("price_move", R_PRICE_MOVE), ("recap", R_RECAP),
-              ("analyst_rating", R_ANALYST), ("routine_pr", R_ROUTINE_PR), ("junk_template", R_JUNK)]
+              ("analyst_rating", R_ANALYST), ("routine_pr", R_ROUTINE_PR),
+              ("holdings_flow", R_HOLDINGS), ("junk_template", R_JUNK)]
 
 # 宏观主题桶(现有 5 类 + 方案新增 5 类)
 MACRO_TOPICS = {
