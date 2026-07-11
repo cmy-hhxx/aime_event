@@ -1,0 +1,266 @@
+{
+ "funnel": {
+  "US_FLASH": {
+   "L0_raw": 412144,
+   "L1_valid": 412144,
+   "L2_drop_tech_noise_tags": 27880,
+   "L2_pass": 384264,
+   "L3_pass": 322581,
+   "L4_admitted_by_title_only": 173722,
+   "L4_pass": 312640,
+   "L5_pass": 311415,
+   "L6_track_general": 275218,
+   "L6_pool_records": 311415,
+   "L4_drop_too_short": 9941,
+   "L6_macro_via_tags_gate": 13195,
+   "L6_track_macro": 36197,
+   "L3_drop_data_print": 47668,
+   "L6_has_stock_entities": 55317,
+   "L3_drop_price_move": 8531,
+   "L5_drop_exact_dup": 1225,
+   "L3_drop_recap": 993,
+   "L3_drop_routine_pr": 240,
+   "L3_drop_analyst_rating": 4248,
+   "L3_drop_junk_template": 3
+  },
+  "US_NEWS": {
+   "L0_raw": 1689381,
+   "L1_valid": 1689381,
+   "L2_drop_tech_noise_tags": 244586,
+   "L2_pass": 1444795,
+   "L3_pass": 1226603,
+   "L4_pass": 1197901,
+   "L5_pass": 1184717,
+   "L6_track_general": 1096896,
+   "L6_pool_records": 1184717,
+   "L6_track_macro": 87821,
+   "L6_macro_via_tags_gate": 32853,
+   "L4_drop_too_short": 28702,
+   "L4_admitted_by_title_only": 93905,
+   "L3_drop_analyst_rating": 22307,
+   "L3_drop_data_print": 158058,
+   "L5_drop_exact_dup": 13184,
+   "L3_drop_junk_template": 13910,
+   "L3_drop_recap": 3903,
+   "L3_drop_routine_pr": 11164,
+   "L3_drop_price_move": 8850
+  }
+ },
+ "clustering": {
+  "n_clusters": 1193268,
+  "n_solo_singletons": 2546,
+  "size_dist": {
+   "1": 1080950,
+   "3-4": 25904,
+   "5-9": 9689,
+   "2": 72963,
+   "200+": 35,
+   "50-199": 217,
+   "10-49": 3510
+  },
+  "chain_stat": {
+   "n_size5plus": 13451,
+   "span_gt7d": 1631,
+   "span_gt30d": 107
+  },
+  "sweep": {
+   "n>=2": {
+    "clusters": 112318,
+    "macro": 9696,
+    "general": 102622
+   },
+   "n>=3": {
+    "clusters": 39355,
+    "macro": 3381,
+    "general": 35974
+   },
+   "n>=5": {
+    "clusters": 13451,
+    "macro": 1185,
+    "general": 12266
+   },
+   "n>=8": {
+    "clusters": 5644,
+    "macro": 539,
+    "general": 5105
+   }
+  },
+  "top25": [
+   {
+    "size": 16341,
+    "bucket": "g_applications",
+    "track": "general",
+    "span": "2026-01-03..2026-04-03",
+    "title": "TOTH FINANCIAL ADVISORY CORP Buys 4 Shares of Science Applications International Corp (SAIC)"
+   },
+   {
+    "size": 8112,
+    "bucket": "g_bohai",
+    "track": "general",
+    "span": "2025-07-08..2025-09-04",
+    "title": "China Bohai Bank Announces Resignation of Board Secretary"
+   },
+   {
+    "size": 5560,
+    "bucket": "g_applications",
+    "track": "general",
+    "span": "2026-04-06..2026-05-25",
+    "title": "Science Applications Is Maintained at Neutral by JP Morgan"
+   },
+   {
+    "size": 2490,
+    "bucket": "g_indus",
+    "track": "general",
+    "span": "2026-05-19..2026-06-29",
+    "title": "PPG Indus Reiterated by RBC Capital -- Price Target Maintained at $119"
+   },
+   {
+    "size": 1513,
+    "bucket": "g_rural",
+    "track": "general",
+    "span": "2026-02-24..2026-06-26",
+    "title": "Moody's Ratings affirms Caja Rural del Sur's deposit ratings at A3; outlook stable"
+   },
+   {
+    "size": 1150,
+    "bucket": "g_mar",
+    "track": "general",
+    "span": "2025-07-09..2025-07-25",
+    "title": "New Analyst Forecast: $MAR Given 'Neutral' Rating"
+   },
+   {
+    "size": 970,
+    "bucket": "macro_tag_Regulation",
+    "track": "macro",
+    "span": "2025-10-20..2025-11-26",
+    "title": "Investar Holding Corporation Announces 2025 Third Quarter Results and Wichita Falls Bancshares, Inc. Transacti"
+   },
+   {
+    "size": 925,
+    "bucket": "g_surged",
+    "track": "general",
+    "span": "2026-02-09..2026-02-25",
+    "title": "TYRES: Profitability surged in 2025, with 2026 guidance targeting higher sales and margins"
+   },
+   {
+    "size": 796,
+    "bucket": "g_applications",
+    "track": "general",
+    "span": "2025-07-08..2025-08-16",
+    "title": "Joby Aviation, L3Harris to explore new aircraft class for defense applications"
+   },
+   {
+    "size": 750,
+    "bucket": "g_monitoring",
+    "track": "general",
+    "span": "2025-07-08..2025-08-29",
+    "title": "AstraZeneca’s LYNPARZA Study: Monitoring Safety in Breast Cancer Treatment"
+   },
+   {
+    "size": 580,
+    "bucket": "g_diversified",
+    "track": "general",
+    "span": "2026-02-17..2026-04-16",
+    "title": "Diversified Energy Files 8K - Operations And Financial Condition >DEC"
+   },
+   {
+    "size": 449,
+    "bucket": "g_bohai",
+    "track": "general",
+    "span": "2025-08-05..2025-08-27",
+    "title": "China Bohai Bank Schedules Board Meeting to Review Interim Results"
+   },
+   {
+    "size": 426,
+    "bucket": "g_province",
+    "track": "general",
+    "span": "2026-02-28..2026-04-08",
+    "title": "13 members of Iran's Revolutionary Guards killed on Monday in U.S.-Israeli attacks on Kerman province - state "
+   },
+   {
+    "size": 406,
+    "bucket": "macro_regulation_policy",
+    "track": "macro",
+    "span": "2025-09-17..2025-10-13",
+    "title": "Chuck Schumer Says Trump Wants A Government Shutdown: 'He Doesn't Want To Do Anything About The Crisis He's Cr"
+   },
+   {
+    "size": 386,
+    "bucket": "g_08",
+    "track": "general",
+    "span": "2026-02-20..2026-04-03",
+    "title": "Hang Seng Tech Index Gives Up Opening Gains; Last 1.4% Lower at 5188.08"
+   },
+   {
+    "size": 382,
+    "bucket": "g_way",
+    "track": "general",
+    "span": "2026-04-14..2026-06-12",
+    "title": "Cash Dividend On The Way From First Merchants' Preferred Stock Series A"
+   },
+   {
+    "size": 376,
+    "bucket": "g_paper",
+    "track": "general",
+    "span": "2026-06-09..2026-06-22",
+    "title": "A Look at International Paper Co (IP) After 9.7% Gain -- GF Value $43.69 vs Price $34.95"
+   },
+   {
+    "size": 368,
+    "bucket": "g_indus",
+    "track": "general",
+    "span": "2025-07-08..2025-10-24",
+    "title": "If You Invested $100 In Advanced Energy Indus Stock 15 Years Ago, You Would Have This Much Today"
+   },
+   {
+    "size": 365,
+    "bucket": "macro_trade_tariff",
+    "track": "macro",
+    "span": "2026-02-19..2026-03-02",
+    "title": "Trump on Supreme Court tariff ruling: I've been waiting forever"
+   },
+   {
+    "size": 321,
+    "bucket": "macro_trade_tariff",
+    "track": "macro",
+    "span": "2026-01-16..2026-01-30",
+    "title": "Trump: May put tariff on countries over Greenland"
+   },
+   {
+    "size": 311,
+    "bucket": "g_various",
+    "track": "general",
+    "span": "2025-07-08..2025-07-25",
+    "title": "Lobbying Update: $60,000 of VERIZON COMMUNICATIONS INC AND VARIOUS SUBSIDIARIES lobbying was just disclosed"
+   },
+   {
+    "size": 282,
+    "bucket": "g_thailand",
+    "track": "general",
+    "span": "2026-02-10..2026-04-30",
+    "title": "Thailand's SET index opens little changed at 1,485.16"
+   },
+   {
+    "size": 252,
+    "bucket": "macro_tag_Regulation",
+    "track": "macro",
+    "span": "2025-08-11..2025-09-02",
+    "title": "Elvictor Group Reports Second Quarter 2025 Financial Results and Provides an Operational Update"
+   },
+   {
+    "size": 242,
+    "bucket": "macro_trade_tariff",
+    "track": "macro",
+    "span": "2025-07-08..2025-07-16",
+    "title": "SCMP: Apparently impatient Trump slaps 25% tariffs on Japan, South Korea"
+   },
+   {
+    "size": 240,
+    "bucket": "g_blue",
+    "track": "general",
+    "span": "2026-01-24..2026-04-03",
+    "title": "2 \"Blue Chip\" Artificial Intelligence (AI) Stocks to Buy for 2026 and Beyond"
+   }
+  ]
+ }
+}
