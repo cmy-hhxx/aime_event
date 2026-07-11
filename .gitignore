@@ -2,6 +2,7 @@
 data/
 output/
 state/
+reports/
 
 # Python
 __pycache__/
