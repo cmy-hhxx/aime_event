@@ -51,6 +51,15 @@ MERGE_OVERLAP = 0.3  # 跨桶簇合并的成员重合率
 MAX_BUCKET_WINDOW = 400  # 滑窗内最多回看条数, 防热门桶 O(n^2) 爆炸
 
 
+def pub_date_between(date_str: str | None, margin_days: int = 7) -> str:
+    """--date 单日跑: 建池只留该日 ±margin 的报道(聚类滑窗 3 天, 留链式簇余量)."""
+    if not date_str:
+        return ""
+    d = dt.date.fromisoformat(date_str)
+    return (f" AND pub_date BETWEEN '{d - dt.timedelta(days=margin_days)}'"
+            f" AND '{d + dt.timedelta(days=margin_days)}'")
+
+
 def tokens(title: str) -> frozenset:
     return frozenset(t for t in TOKEN_RE.findall(title.lower()) if t not in STOP and len(t) > 1)
 
@@ -135,6 +144,7 @@ def run(args) -> None:
     con.execute("SET memory_limit='400GB'")
 
     tech_cond = " AND ".join(f"tags NOT LIKE '%{t}%'" for t in TECH_NOISE_TAGS)
+    date_cond = pub_date_between(getattr(args, "date", None))
     macro_cases = " ".join(
         f"WHEN regexp_matches(lower(title), '{pat}') THEN 'macro_{k}'"
         for k, pat in MACRO_TOPICS.items()
@@ -149,7 +159,7 @@ def run(args) -> None:
       FROM read_parquet('{config.EVENT_INDEX_DIR}/v1_*.parquet')
       WHERE content_type IN ('US_NEWS','US_FLASH','US_ARTICLE','US_ROBOT')
         AND pub_date <> '' AND body_len >= 200 AND title <> ''
-        AND {tech_cond}
+        AND {tech_cond}{date_cond}
     ),
     company AS (
       SELECT b.* EXCLUDE (has_crypto), 'company' AS track, u.sym AS bucket

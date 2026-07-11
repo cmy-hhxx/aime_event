@@ -11,7 +11,7 @@
 - 三阶段事件流水线**全部可用**,产出 `FinancialPredictionTrainingCase.v4` 事件训练包:
   - `cleaning`:清洗、去重(精确 + 可选近似)、时间排序、分片 JSONL 导出 —— 已实现
   - `extraction`:事件抽取(索引 → 聚类 → 阈值筛选 → LLM 结构化)—— 已实现
-  - `completion`:事件补全(yfinance（或同花顺内部 api） 行情打标 → v4 训练包组装 )—— 已实现
+  - `completion`:事件补全(日线打标 + 完整事件日 1m 分时 + v4 schema 验证组装)—— 已实现
 - News/Flash 事件漏斗已完成本地实验,但**尚未固化进 `src/extraction/cluster.py` 主管道**:
   - `scripts/template_miner.py`:标题模板骨架挖掘 + 跨期 holdout 验证
   - `scripts/funnel_experiment.py`:七类硬过滤、双轨聚类、阈值扫描与候选簇导出
@@ -93,6 +93,8 @@ python -m src.main extract all                    # index -> cluster -> select -
 
 # 事件补全(fetch 需单独在本地 Mac 跑,见 docs/pipeline.md)
 python -m src.main complete fetch --structured ... --outdir ...   # yfinance 拉日线面板
+python -m src.main complete fetch-intraday --event-date YYYY-MM-DD # Yahoo 最近 30 天 1m
+python -m src.main complete import-intraday --input ... --provider ... # 超窗真实 1m JSONL
 python -m src.main complete label                 # 离线计算 1D/5D/20D 标签
 python -m src.main complete assemble              # 组装 v4 成品 + 审计
 python -m src.main complete all                   # label -> assemble
@@ -127,7 +129,7 @@ python3 -m venv .venv
 .venv/bin/python -m src.main clean --help
 ```
 
-当前 `main` 在本地 `.venv` 的实测基线(2026-07-11):`52 passed, 6 failed`。失败项是已存在状态,不是文档更新引入:
+当前工作区在本地 `.venv` 的实测基线(2026-07-11):`56 passed, 6 failed`。失败项是已存在状态,不是本次 completion 更新引入:
 
 - 3 个 cleaning 测试仍按“默认启用近似去重”编写,但 `NEAR_DEDUP_ENABLED=False`,因此 signature 为空且 pipeline 多保留 1 条。
 - 2 个 CLI help 测试期望显示 `--no-near-dedup`,但该参数当前被 `argparse.SUPPRESS` 隐藏。
@@ -142,6 +144,8 @@ python3 -m venv .venv
 - 测试清洗/抽取行为时,用极小的临时输入,并覆盖所有输出/state 路径(含 `--final-state-dir`),避免写入 `/mnt`。
 - **ceph-fuse 并发红线**:index 并发回退到 `EVENT_INDEX_WORKERS`,勿擅自调高;详见 `docs/pipeline.md`。
 - `complete fetch` 依赖 yfinance,须在本地 Mac 运行,不在远端跑。
+- Yahoo 1m 实际仅覆盖最近约 30 天;更早事件日不能伪造/上采样,必须用
+  `complete import-intraday` 导入真实逐 bar 数据。缺完整分时的事件不生成 final。
 - 不要在远端机器上用 git;commit/push 都从本地 clone 做。
 - 远端部署代码在 `/mnt/ainvest_content/v1/code/aime_event`;结果产物归 `/mnt/ainvest_content/v3/`。
 - 不要提交 SSH key、token、主机凭据或生成的大数据产物。

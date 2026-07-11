@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import sys
 from dataclasses import replace
+from datetime import date as _date
 from pathlib import Path
 
 from src.config import DEFAULT_CONFIG, PipelineConfig
@@ -20,6 +21,14 @@ def positive_float(value: str) -> float:
     if parsed <= 0:
         raise argparse.ArgumentTypeError("must be > 0")
     return parsed
+
+
+def iso_date(value: str) -> str:
+    try:
+        _date.fromisoformat(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError("must be YYYY-MM-DD")
+    return value
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -144,7 +153,7 @@ def build_event_parser(stage: str) -> argparse.ArgumentParser:
         prog=f"python -m src.main {stage}",
         description=("事件抽取：index建索引 / cluster聚类 / select阈值筛选 / structure LLM结构化"
                      if stage == "extract" else
-                     "事件补全：fetch拉行情(本地Mac跑) / label打标 / assemble组装v4"),
+                     "事件补全：fetch拉日线 / fetch-intraday拉1m分时 / label打标 / assemble组装v4"),
     )
     sub = parser.add_subparsers(dest="step", required=True)
     if stage == "extract":
@@ -156,15 +165,33 @@ def build_event_parser(stage: str) -> argparse.ArgumentParser:
         p = sub.add_parser("cluster", help="事件候选聚类")
         p.add_argument("--workers", type=positive_int, default=32)
         p.add_argument("--shards", type=positive_int, default=96)
+        p.add_argument("--date", type=iso_date, default=None, help="只聚类该日 ±7 天的报道")
         p = sub.add_parser("select", help="阈值筛选(--sweep 看阈值表)")
         p.add_argument("--sweep", action="store_true")
         p.add_argument("--dry-run", action="store_true")
         p.add_argument("--limit", type=int, default=0, help="只送审前 N 个候选，用于小样本冒烟")
         p.add_argument("--triage-workers", type=positive_int, default=24)
+        p.add_argument("--date", type=iso_date, default=None, help="只送审 peak_date=该日的候选")
         p = sub.add_parser("structure", help="LLM 结构化(先 --limit 5 验收)")
         p.add_argument("--workers", type=positive_int, default=24)
         p.add_argument("--limit", type=int, default=0)
-        sub.add_parser("all", help="顺序跑 index->cluster->select->structure(阈值确定后用)")
+        p.add_argument("--date", type=iso_date, default=None, help="只结构化 peak_date=该日的入选事件")
+        p = sub.add_parser("all", help="顺序跑 index->cluster->select->structure(阈值确定后用)")
+        p.add_argument("--date", type=iso_date, default=None, help="按单日跑: 透传给 cluster/select/structure")
+        p = sub.add_parser("notice8k", help="从 US_NOTICE 抽 8-K 事件行(独立步; --date/--day/--month 限窗)")
+        g = p.add_mutually_exclusive_group()
+        g.add_argument("--date", type=iso_date, default=None, help="只抽该自然日的 8-K")
+        g.add_argument("--day", type=positive_int, default=None, help="最近 N 个自然日(默认等价 --day 1)")
+        g.add_argument("--month", type=positive_int, default=None, help="最近 N 个自然月(month 1=D 所在整月)")
+        p.add_argument("--src", default=None, help="覆盖 US_NOTICE.jsonl 路径")
+        p.add_argument("--v2", default=None, help="覆盖 notice.jsonl 路径")
+        p.add_argument("--out", default=None, help="覆盖输出 jsonl 路径")
+        p.add_argument("--no-backfill", action="store_true", help="跳过 v2 正文补全")
+        p.add_argument("--dry-run", action="store_true", help="只报窗口/条数, 不写文件")
+        p = sub.add_parser("notice8k-select", help="8-K 事件行 LLM triage 入选 -> selected_8k.jsonl")
+        p.add_argument("--date", type=iso_date, required=True, help="对应 notice8k --date 的产物")
+        p.add_argument("--limit", type=int, default=0, help="只送审前 N 条，用于小样本冒烟")
+        p.add_argument("--triage-workers", type=positive_int, default=12)
     else:
         from src import config
         p = sub.add_parser("fetch", help="yfinance 拉日线面板(在本地 Mac 跑)")
@@ -172,25 +199,42 @@ def build_event_parser(stage: str) -> argparse.ArgumentParser:
         p.add_argument("--pause", type=float, default=2.0)
         p.add_argument("--structured", default=f"{config.EVENT_STRUCTURED_DIR}/structured.jsonl")
         p.add_argument("--outdir", default=config.EVENT_MARKET_DIR)
-        sub.add_parser("label", help="离线计算 1D/5D/20D 标签")
+        p.add_argument("--date", type=iso_date, default=None, help="只拉 peak_date=该日事件的 symbol")
+        p = sub.add_parser("import-intraday", help="导入其他行情源的真实 1m JSONL")
+        p.add_argument("--input", required=True, help="逐 bar JSONL 输入")
+        p.add_argument("--provider", required=True, help="行情提供方名称")
+        p.add_argument("--outdir", default=config.EVENT_MARKET_DIR)
+        p = sub.add_parser("fetch-intraday", help="yfinance 拉事件日完整 1m 面板(本地 Mac 跑)")
+        p.add_argument("--pause", type=float, default=1.0)
+        p.add_argument("--event-date", default="", help="只拉指定事件日 YYYY-MM-DD")
+        p.add_argument("--structured", default=f"{config.EVENT_STRUCTURED_DIR}/structured.jsonl")
+        p.add_argument("--outdir", default=config.EVENT_MARKET_DIR)
+        p = sub.add_parser("label", help="离线计算 1D/5D/20D 标签")
+        p.add_argument("--date", type=iso_date, default=None, help="只打 peak_date=该日的事件")
         p = sub.add_parser("assemble", help="组装 v4 成品 + 审计")
         p.add_argument("--max-cases", type=int, default=0)
-        sub.add_parser("all", help="label -> assemble (fetch 需单独在本地跑)")
+        p.add_argument("--date", type=iso_date, default=None, help="只组装 peak_date=该日的事件")
+        p.add_argument("--allow-no-intraday", action="store_true",
+                       help="缺完整 1m 面板时降级组装(panel 置空占位)而非丢弃")
+        p = sub.add_parser("all", help="label -> assemble (fetch 需单独在本地跑)")
+        p.add_argument("--date", type=iso_date, default=None, help="透传给 label/assemble")
+        p.add_argument("--allow-no-intraday", action="store_true")
     return parser
 
 
 def run_extract(args: argparse.Namespace) -> None:
     from src import config
-    from src.extraction import cluster, index, select, structure
+    from src.extraction import cluster, index, notice_8k, notice_8k_select, select, structure
     steps = {"index": index.run, "cluster": cluster.run,
-             "select": select.run, "structure": structure.run}
+             "select": select.run, "structure": structure.run,
+             "notice8k": notice_8k.run, "notice8k-select": notice_8k_select.run}
     if args.step == "all":
         import argparse as ap
         # ceph-fuse 红线: index 并发必须走 config 缺省, 不能落到 cpu_count
         index.run(ap.Namespace(workers=config.EVENT_INDEX_WORKERS, limit=0, fresh=False))
-        cluster.run(ap.Namespace(workers=32, shards=96))
-        select.run(ap.Namespace(sweep=False, dry_run=False, triage_workers=24))
-        structure.run(ap.Namespace(workers=24, limit=0))
+        cluster.run(ap.Namespace(workers=32, shards=96, date=args.date))
+        select.run(ap.Namespace(sweep=False, dry_run=False, triage_workers=24, date=args.date))
+        structure.run(ap.Namespace(workers=24, limit=0, date=args.date))
         return
     if args.step == "index" and args.workers is None:
         args.workers = config.EVENT_INDEX_WORKERS
@@ -201,14 +245,19 @@ def run_complete(args: argparse.Namespace) -> None:
     from src.completion import assemble, market
     if args.step == "fetch":
         market.run_fetch(args)
+    elif args.step == "fetch-intraday":
+        market.run_fetch_intraday(args)
+    elif args.step == "import-intraday":
+        market.run_import_intraday(args)
     elif args.step == "label":
         market.run_label(args)
     elif args.step == "assemble":
         assemble.run(args)
     else:  # all = label -> assemble
         import argparse as ap
-        market.run_label(ap.Namespace())
-        assemble.run(ap.Namespace(max_cases=0))
+        market.run_label(ap.Namespace(date=args.date))
+        assemble.run(ap.Namespace(max_cases=0, date=args.date,
+                                  allow_no_intraday=args.allow_no_intraday))
 
 
 def main(argv: list[str] | None = None) -> None:

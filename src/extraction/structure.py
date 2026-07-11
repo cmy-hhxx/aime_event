@@ -24,6 +24,7 @@ from src.extraction import prompts
 
 MAX_ARTICLES = 8
 MAX_BODY_CHARS = 2800
+MAX_BODY_CHARS_8K = 8400  # 8-K 单文档事件, 正文额度放宽到 3 篇新闻的量
 GOOD_SOURCES = ("reuters", "bloomberg", "wall street journal", "cnbc", "financial times",
                 "marketwatch", "pr newswire", "business wire", "nasdaq", "ainvest wire")
 
@@ -31,9 +32,9 @@ TAG_RE = re.compile(r"<[^>]+>")
 WS_RE = re.compile(r"\s+")
 
 
-def clean_body(body: str) -> str:
+def clean_body(body: str, limit: int = MAX_BODY_CHARS) -> str:
     text = html.unescape(TAG_RE.sub(" ", body or ""))
-    return WS_RE.sub(" ", text).strip()[:MAX_BODY_CHARS]
+    return WS_RE.sub(" ", text).strip()[:limit]
 
 
 def source_rank(name: str) -> int:
@@ -45,8 +46,34 @@ def source_rank(name: str) -> int:
 
 
 def load_selected() -> list[dict]:
-    with open(f"{config.EVENT_SELECTED_DIR}/selected_events.jsonl") as fh:
-        return [json.loads(l) for l in fh if l.strip()]
+    """新闻入选事件 + 8-K 入选事件(selected_8k.jsonl, 存在才读); event_id 互不重叠."""
+    events = []
+    for name in ("selected_events.jsonl", "selected_8k.jsonl"):
+        path = f"{config.EVENT_SELECTED_DIR}/{name}"
+        if not os.path.exists(path):
+            continue
+        with open(path) as fh:
+            events.extend(json.loads(l) for l in fh if l.strip())
+    return events
+
+
+def eightk_member(ev: dict) -> dict:
+    """8-K 事件没有新闻簇成员, 用公告自身正文构造单篇伪 member."""
+    k = ev["_8k"]
+    return {
+        "id": k.get("trace_id") or ev["event_id"], "pub_date": ev["peak_date"],
+        "published_at": ev["peak_date"], "content_type": "US_NOTICE",
+        "source_name": "SEC EDGAR 8-K",
+        "title": k.get("event_title") or f"Form 8-K Item {k.get('item_code') or '?'}",
+        "url": k.get("source_url"),
+        "_body": clean_body(k.get("summary") or "", limit=MAX_BODY_CHARS_8K),
+    }
+
+
+def filter_by_peak(events: list[dict], date: str | None) -> list[dict]:
+    if not date:
+        return events
+    return [e for e in events if e.get("peak_date") == date]
 
 
 def pick_members(event_ids: list[str]) -> dict[str, list[dict]]:
@@ -122,7 +149,9 @@ def structure_one(ev: dict) -> dict:
                      "n_articles", "n_sources", "n_v2_reactions", "score", "peak_date")}
     r["_source_ids"] = [m["id"] for m in ev["_members"]]
     r["_source_meta"] = [{"id": m["id"], "pub_date": m["pub_date"], "published_at": m["published_at"],
-                          "source": m["source_name"], "title": m["title"]} for m in ev["_members"]]
+                          "source": m["source_name"], "title": m["title"],
+                          "content_type": m.get("content_type"),
+                          "url": m.get("url")} for m in ev["_members"]]
     return r
 
 
@@ -130,14 +159,19 @@ def run(args) -> None:
     os.makedirs(config.EVENT_STRUCTURED_DIR, exist_ok=True)
     t0 = time.time()
     events = load_selected()
+    events = filter_by_peak(events, getattr(args, "date", None))
     if args.limit:
         events = events[: args.limit]
     print(f"[stage_d] 待结构化事件: {len(events)}", flush=True)
 
-    members = pick_members([e["event_id"] for e in events])
-    bodies = fetch_bodies(members, config.EVENT_V1_DIR)
+    news = [e for e in events if not e.get("_8k")]
+    members = pick_members([e["event_id"] for e in news]) if news else {}
+    bodies = fetch_bodies(members, config.EVENT_V1_DIR) if news else {}
     print(f"[stage_d] 取正文 {len(bodies)} 篇 ({time.time()-t0:.0f}s)", flush=True)
     for e in events:
+        if e.get("_8k"):
+            e["_members"] = [eightk_member(e)] if e["_8k"].get("summary") else []
+            continue
         ms = members.get(e["event_id"], [])
         for m in ms:
             m["_body"] = bodies.get(m["id"], "")

@@ -33,6 +33,34 @@ TRIAGE_USER_TMPL = """新闻簇信息:
   "title_cn": "中文事件标题,格式如: 主体+动作+市场含义"
 }}"""
 
+NOTICE8K_TRIAGE_SYSTEM = """你是金融事件数据集的筛选员。给你一份 SEC 8-K 当期报告的信息(条目号/标题/摘要或原文节选),\
+判断它是否是一个"可用于股价预测训练的离散事件"。合格标准:
+1. 单一、可定自然日的公司事件(重大协议/并购/高管变动/融资发行/临床数据/业绩与指引等),\
+不是例行程序性披露(股东会投票结果、章程修订、纯报表附录、常规展期)
+2. 对该美股(或美股ADR/ETF)定价有信息量; 发行人无美股交易代码则不合格
+3. primary_symbols 给发行人的真实美股代码(从公司名推断); 不确定宁可给空数组并 is_valid_event=false
+只输出 JSON。"""
+
+NOTICE8K_TRIAGE_USER_TMPL = """8-K 公告信息:
+- SEC 申报日: {event_date}
+- 条目号 Item: {item_code} (如 1.01=重大协议, 2.02=业绩, 5.02=高管变动, 8.01=其他重大事件)
+- 标题: {event_title}
+- 摘要/原文节选:
+{summary}
+
+输出 JSON:
+{{
+  "is_valid_event": true/false,
+  "reject_reason": null 或 简短原因,
+  "event_type": "{types}" 中之一,
+  "event_family": "英文snake_case短语,如 ai_hardware_platform",
+  "event_subject": "事件主体,如 NVIDIA Blackwell platform / Best Buy Q1 earnings",
+  "primary_symbols": ["发行人的美股代码,最多3个"],
+  "event_date": "YYYY-MM-DD,事件自然日(公告披露的事件发生/签署日,通常=申报日或其前几天)",
+  "significance": 1到5整数(5=巨头财报/重大并购级, 3=值得单独建样本, 1=例行披露噪声),
+  "title_cn": "中文事件标题,格式如: 主体+动作+市场含义"
+}}"""
+
 STRUCTURE_SYSTEM = """你是金融事件训练数据的结构化标注员。基于一簇同一事件的新闻报道,产出该事件的结构化训练字段。
 
 硬性泄露规则(最重要):

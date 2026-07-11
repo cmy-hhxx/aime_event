@@ -1,10 +1,10 @@
 """Stage F: 组装 FinancialPredictionTrainingCase.v4 格式成品 + 泄露/完整性审计.
 
-输入: structured/structured.jsonl + market/labels.jsonl
-输出: final/<case_id>.json (每事件一个), final/manifest.jsonl, reports/stage_assemble_summary.json
+输入: structured/structured.jsonl + market/labels.jsonl + market/intraday.jsonl
+输出: final/events.jsonl (一行一个完整事件包, 覆盖式), reports/stage_assemble_summary.json
 
-增强层(分时面板/弱关联搜索链/混杂审计)按用户决策留空, 但保留 schema 占位与 status 标记,
-与样例中 intraday_volume_panel.status="missing_..." 的做法一致。
+成品必须通过 schema/completion/final_case.schema.json(顶层字段与 schema 严格一致);
+缺真实完整分时的事件默认不落 final, --allow-no-intraday 可降级为空占位面板。
 """
 from __future__ import annotations
 
@@ -13,61 +13,18 @@ import os
 import re
 from collections import Counter
 
+import jsonschema
+
 from src import config
 
 SCHEMA = "FinancialPredictionTrainingCase.v4.three_year_event_signal_pack"
-OBJECTIVE = ("训练金融预测模型：从真实事件事实、事件前行情和关系证据，预测多标的 1D/5D/20D "
-             "hidden return labels，并用弱关联搜索链做混杂审计。")
 LEAKAGE_BOUNDARY = ("S0 pre-event market and S1 official event facts are model-visible; "
                     "S2/S3/S4 prices, follow-on news, analyst reactions and social hindsight "
                     "are hidden labels/audit only.")
 RELATION_POLICY = "relation text is visible, but numeric direction/strength labels are not manually assigned"
-WEAK_POLICY = ("expanded weak symbols are candidate relation context only; unpriced symbols "
-               "require price procurement before becoming supervised targets")
 TRAINING_TREATMENT = "model-visible relation context; future direction learned from hidden labels"
 TREATMENT_PRICED_CN = "已打价：进入 1D/5D/20D 未来收益标签；方向和强度由标签学习。"
 TREATMENT_UNPRICED_CN = "待补价：先作弱关联召回，补齐行情面板后再决定是否进入监督标签。"
-
-DATA_DIMENSION_CONTRACT = [
-    {"dimension": "event_fact", "field_path": "main_event.facts_publicly_reported",
-     "training_role": "model_visible_event_text", "rule": "仅使用事件时点可见的官方/权威事实。"},
-    {"dimension": "pre_event_market", "field_path": "market_data.symbols.*.model_input_ohlcv_adjusted_daily",
-     "training_role": "model_visible_sequence", "rule": "截止 base_close_date，首个反应交易日之后不可见。"},
-    {"dimension": "intraday_full_session_volume", "field_path": "intraday_volume_panel + market_data.symbols.*.intraday_1m_full_session",
-     "training_role": "model_visible_or_hidden_by_visibility_mask",
-     "rule": "必须存全天 1m 分时和成交量，但输入时按 event_timestamp_et 做可见性掩码；事件后分时只能用于动态更新任务或隐藏审计。"},
-    {"dimension": "relation_context", "field_path": "target_relation_evidence.rows",
-     "training_role": "model_visible_relation_context", "rule": "写明入池理由，但不打人工方向/强度。"},
-    {"dimension": "future_return", "field_path": "supervised_targets_hidden_labels.labels",
-     "training_role": "hidden_supervision_and_eval", "rule": "1D/5D/20D 标签仅用于监督和评测。"},
-    {"dimension": "weak_association_events", "field_path": "weak_association_ai_search.events",
-     "training_role": "search_candidate_or_hidden_audit", "rule": "多轮 AI 搜索得到的弱关联事件需按时间门控，窗口内只审计或另建样本。"},
-]
-
-PREDICTION_TASK = {
-    "task_name": "event_to_multi_target_return_prediction",
-    "model_input_should_include": ["official event facts", "event family/type",
-                                   "pre-event OHLCV/features", "target relation context", "source ids"],
-    "model_input_must_not_include": ["1D/5D/20D labels", "follow-on events after leakage boundary",
-                                     "analyst hindsight", "manual event impact direction",
-                                     "manual relation strength"],
-    "supervised_targets": ["direction", "return interval", "cross-section rank", "abnormal return vs proxy"],
-}
-
-NOT_IN_SAMPLE = [
-    {"data_block": "intraday_full_session_price_volume",
-     "reason": "现有日频 OHLCV 无法看到全天分时、分钟成交量、事件前后成交量突变和尾盘确认。",
-     "effect_if_missing": "模型会把“全天发生过的反应”压缩成一个日 K，无法学习发布前交易、发布后 5/30/120 分钟传导、相关标的先后反应和成交量确认。",
-     "procurement_or_build_action": "P0：接入历史 1m 全日 OHLCV+volume+VWAP；每个事件至少覆盖 target_symbols、事件日全场、20 个前序交易日同分钟成交量基线。"},
-    {"data_block": "options_implied_move",
-     "reason": "缺少事件前预期差，模型只能从历史价格间接推断。",
-     "effect_if_missing": "预测置信区间和方向校准较弱。",
-     "procurement_or_build_action": "接入期权 IV/skew/volume。"},
-    {"data_block": "news_social_trend_tape",
-     "reason": "弱关联候选需要 Google/Perplexity/X/趋势热榜多轮搜索。",
-     "effect_if_missing": "传播速度、叙事强度和二阶标的发现不足。",
-     "procurement_or_build_action": "建立事件后 1h/1d/5d social/news tape。"},
-]
 
 METRICS_TO_TRAIN = ["direction", "return interval", "cross-section rank", "abnormal return vs proxy"]
 
@@ -76,32 +33,216 @@ ISO_DATE_RE = re.compile(r"20\d{2}-\d{2}-\d{2}")
 
 RELATION_CN_DEFAULT = "事件相关候选"
 CASE_ID_RE = re.compile(r"^[A-Z0-9][A-Z0-9_]{5,80}$")
+SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+                           "schema", "completion", "final_case.schema.json")
 
 
-def slice_defs(cal: dict, pre_start: str) -> list[dict]:
-    return [
-        {"slice_id": "S0_PRE_EVENT_MARKET_CONTEXT", "display": "事件前行情上下文",
-         "time_range": f"{pre_start} -> {cal['base_close_date']} close", "visible_to_model": True,
-         "contains": ["pre-event OHLCV", "compact price features", "candidate target universe"],
-         "not_contains": ["future prices", "future labels"], "training_role": "模型输入窗口"},
-        {"slice_id": "S1_EVENT_TEXT", "display": "事件事实进入",
-         "time_range": cal["event_natural_date"], "visible_to_model": True,
-         "contains": ["official event facts", "source ids", "event type and subject"],
-         "not_contains": ["post-event analyst reactions", "future labels"], "training_role": "模型输入事件文本"},
-        {"slice_id": "S2_1D_LABEL", "display": "1D 反应标签",
-         "time_range": cal["label_dates"]["1d"], "visible_to_model": False,
-         "contains": ["1D close-to-close", "open gap"], "not_contains": ["model input"],
-         "training_role": "hidden label"},
-        {"slice_id": "S3_5D_LABEL", "display": "5D 标签",
-         "time_range": f"{cal['first_tradable_session']} -> {cal['label_dates']['5d']}",
-         "visible_to_model": False, "contains": ["5D return labels", "early drift"],
-         "not_contains": ["model input"], "training_role": "hidden label"},
-        {"slice_id": "S4_20D_LABEL_AND_AUDIT", "display": "20D 标签与混杂审计",
-         "time_range": f"{cal['first_tradable_session']} -> {cal['label_dates']['20d']}",
-         "visible_to_model": False,
-         "contains": ["20D return labels", "weak associated follow-on candidates", "confounder audit"],
-         "not_contains": ["model input"], "training_role": "hidden eval + attribution audit"},
-    ]
+SEARCH_KINDS = ("News", "Flash", "Robot", "Post", "Article", "Report", "teleconference", "AI_search")
+SEARCH_INDEX_FILES = {  # 类目 -> index parquet 文件名
+    "News": "v1_US_NEWS", "Flash": "v1_US_FLASH", "Robot": "v1_US_ROBOT",
+    "Post": "v1_US_POST", "Article": "v1_US_ARTICLE",
+    "Report": "v2_report", "teleconference": "v2_teleconference",
+}
+SEARCH_WINDOW = (-3, 1)   # 检索窗: 事件日前 3 天 ~ 后 1 天(峰值报道; 不引入更晚的事后反应)
+SEARCH_CAP = 10           # 每类目上限
+SEARCH_SNIPPET_CHARS = 200  # summary 摘录长度(seek 直读原文截取)
+_V2_KINDS = ("Report", "teleconference")
+_TAG_RE = re.compile(r"<[^>]+>")
+_WS_RE = re.compile(r"\s+")
+_SYM_RE = re.compile(r"^[A-Z0-9.\-]{1,8}$")
+# 公司名尾缀, 生成标题匹配词时剥掉
+_NAME_SUFFIX_RE = re.compile(
+    r",?\s+(Inc|Corp|Corporation|Company|Co|Ltd|LLC|plc|Group|Holdings?|Technologies|"
+    r"Therapeutics|Pharmaceuticals|Financial|Services)\.?$", re.I)
+
+
+class RelatedSearcher:
+    """按 (primary symbol / 公司名, 事件日窗口) 在 index parquet 里检索各类目相关记录.
+
+    NEWS 索引本导出无 symbols(entities.stocks 缺失), 靠公司名词边界匹配标题;
+    其余类目 symbol 与标题双通道。index 目录缺失时 available=False, 调用方退回纯溯源。
+    """
+
+    def __init__(self, index_dir: str | None = None):
+        self.index_dir = index_dir or config.EVENT_INDEX_DIR
+        self.tables = {k: f"{self.index_dir}/{f}.parquet"
+                       for k, f in SEARCH_INDEX_FILES.items()
+                       if os.path.exists(f"{self.index_dir}/{f}.parquet")}
+        self.con = None
+        self._cols: dict[str, set[str]] = {}
+        if self.tables:
+            import duckdb
+            self.con = duckdb.connect()
+
+    @property
+    def available(self) -> bool:
+        return bool(self.con)
+
+    def _columns(self, path: str) -> set[str]:
+        if path not in self._cols:
+            self._cols[path] = {r[0] for r in
+                                self.con.execute(f"DESCRIBE SELECT * FROM read_parquet('{path}')").fetchall()}
+        return self._cols[path]
+
+    def search(self, symbols: list[str], name: str, event_date: str) -> dict[str, list[dict]]:
+        if not self.con or not event_date:
+            return {}
+        from datetime import date, timedelta
+        try:
+            d = date.fromisoformat(event_date)
+        except ValueError:
+            return {}
+        d0 = (d + timedelta(days=SEARCH_WINDOW[0])).isoformat()
+        d1 = (d + timedelta(days=SEARCH_WINDOW[1])).isoformat()
+        syms = [s for s in symbols if isinstance(s, str) and _SYM_RE.match(s)]
+        conds = [f"(',' || symbols || ',') LIKE '%,{s},%'" for s in syms]
+        pat = _title_pattern(name).replace("'", "''")  # SQL 字面量内单引号转义
+        if pat:
+            conds.append(f"regexp_matches(title, '(?i)\\b{pat}\\b')")
+        if not conds:
+            return {}
+        cond = " OR ".join(conds)
+        out = {}
+        for kind, path in self.tables.items():
+            cols = self._columns(path)
+            # seek 直读原文所需的定位列(index parquet 均有; 缺失时退化为只出 title/时间)
+            extra = ", file, \"offset\", nbytes" if {"file", "offset", "nbytes"} <= cols else \
+                    ", file, offsets" if {"file", "offsets"} <= cols else ""
+            rows = self.con.execute(f"""
+              SELECT title, published_at{extra} FROM read_parquet('{path}')
+              WHERE pub_date BETWEEN '{d0}' AND '{d1}' AND ({cond})
+              ORDER BY published_at LIMIT {SEARCH_CAP}
+            """).fetchall()
+            items = []
+            for row in rows:
+                it = {"title": str(row[0] or ""), "summary": "", "published_at": row[1], "url": None}
+                if len(row) == 5:    # v1: file/offset/nbytes
+                    it["url"], it["summary"] = self._read_v1(row[2], row[3], row[4])
+                elif len(row) == 4:  # v2: file/offsets(逗号串, 取首段)
+                    it["url"], it["summary"] = self._read_v2(row[2], row[3])
+                items.append(it)
+            out[kind] = items
+        return out
+
+    def _read_v1(self, fname: str, offset: int, nbytes: int) -> tuple[str | None, str]:
+        """seek 直读 v1 原始行, 取 source.url(退回 dedup.debug 的规范化 url) + body 摘录."""
+        try:
+            with open(os.path.join(config.EVENT_V1_DIR, fname), "rb") as fh:
+                fh.seek(offset)
+                rec = json.loads(fh.read(nbytes))
+        except Exception:
+            return None, ""
+        src = rec.get("source")
+        url = src.get("url") if isinstance(src, dict) else None
+        if not url or url == "#":
+            dbg = (rec.get("dedup") or {}).get("debug") or {}
+            url = dbg.get("normalized_url") or dbg.get("source_url") or None
+        return url, _snippet(rec.get("body") or "")
+
+    def _read_v2(self, fname: str, offsets: str) -> tuple[str | None, str]:
+        """seek 直读 v2 首段(offsets 为逗号串), 取 source.url + text 摘录."""
+        try:
+            first = int(str(offsets).split(",")[0])
+            with open(os.path.join(config.EVENT_V2_DIR, fname), "rb") as fh:
+                fh.seek(first)
+                rec = json.loads(fh.readline())
+        except Exception:
+            return None, ""
+        src = rec.get("source")
+        url = src.get("url") if isinstance(src, dict) else None
+        if not url and isinstance(src, str):
+            m = re.search(r"https?://[^\s'\"}]+", src)
+            url = m.group(0) if m else None
+        return url, _snippet(rec.get("text") or "")
+
+
+def _snippet(text: str) -> str:
+    """正文/段落 -> summary 摘录: 去 HTML 标签压缩空白后截取."""
+    return _WS_RE.sub(" ", _TAG_RE.sub(" ", text)).strip()[:SEARCH_SNIPPET_CHARS]
+
+
+def _title_pattern(name: str) -> str:
+    """公司名/主体 -> 标题匹配的正则片段(取前两词, 转义, 过短则弃用避免噪声)."""
+    n = (name or "").strip()
+    while True:  # 尾缀可能叠加(如 "Ionis Pharmaceuticals, Inc."), 剥到不动为止
+        stripped = _NAME_SUFFIX_RE.sub("", n).strip()
+        if stripped == n or not stripped:
+            break
+        n = stripped
+    words = n.split()[:2]
+    pat = re.escape(" ".join(words)).replace(r"\ ", r"\s+")
+    return pat if len("".join(words)) >= 4 else ""
+
+
+def _primary_company(r: dict) -> str:
+    """事件主体的检索名: 主 symbol 在 relation_rows 里的公司名, 退回 event_subject."""
+    prim = ((r.get("_triage") or {}).get("primary_symbols") or [None])[0]
+    for row in r.get("relation_rows") or []:
+        if row.get("symbol") == prim and row.get("company"):
+            return str(row["company"])
+    return str((r.get("main_event") or {}).get("event_subject") or "")
+
+
+def association_search(r: dict, searcher: "RelatedSearcher | None" = None) -> dict:
+    """事件相关信息检索 + 结构化实际引用来源的溯源合并, 每类目按时间升序。"""
+    result = {k: [] for k in SEARCH_KINDS}
+    mapping = {
+        "US_NEWS": "News", "US_FLASH": "Flash", "US_ROBOT": "Robot",
+        "US_POST": "Post", "US_ARTICLE": "Article", "REPORT": "Report",
+        "TELECONFERENCE": "teleconference",
+    }
+    # 1) 结构化实际用过的来源(溯源, 8-K 公告带 EDGAR url; US_NOTICE 归入 News 类目)
+    for item in r.get("_source_meta") or []:
+        kind = mapping.get(str(item.get("content_type") or "").upper(), "News")
+        result[kind].append({
+            "title": str(item.get("title") or ""),
+            "summary": "",
+            "published_at": item.get("published_at"),
+            "url": item.get("url"),
+        })
+    # 2) 按 (primary symbol/公司名, 事件日窗口) 检索各库回填
+    if searcher and searcher.available:
+        tri = r.get("_triage") or {}
+        event_date = (r.get("main_event") or {}).get("event_date") or tri.get("event_date") or ""
+        found = searcher.search(tri.get("primary_symbols") or [], _primary_company(r), event_date)
+        for kind, items in found.items():
+            result[kind].extend(items)
+    # 3) 类目内去重(按标题前缀) + 按时间升序 + 截断
+    for kind, items in result.items():
+        seen, uniq = set(), []
+        for it in sorted(items, key=lambda x: str(x.get("published_at") or "")):
+            key = re.sub(r"\s+", " ", it["title"].lower())[:80]
+            if key in seen:
+                continue
+            seen.add(key)
+            uniq.append(it)
+        result[kind] = uniq[:SEARCH_CAP]
+    return result
+
+
+def schema_issues(case: dict) -> list[str]:
+    with open(SCHEMA_PATH) as fh:
+        validator = jsonschema.Draft7Validator(json.load(fh))
+    issues = []
+    for err in sorted(validator.iter_errors(case), key=lambda e: list(e.absolute_path)):
+        path = ".".join(str(p) for p in err.absolute_path) or "$"
+        issues.append(f"schema {path}: {err.message}")
+    return issues
+
+
+def complete_intraday_panel(panel: dict, event_date: str) -> bool:
+    bars = panel.get("bars") or []
+    stamps = [str(b.get("timestamp_et") or "") for b in bars]
+    return bool(
+        panel.get("is_complete_session") is True
+        and panel.get("bar_count") == len(bars)
+        and len(bars) >= 380
+        and stamps == sorted(set(stamps))
+        and stamps[0].startswith(f"{event_date} ")
+        and stamps[-1].startswith(f"{event_date} ")
+        and stamps[0][11:16] <= "09:35"
+        and stamps[-1][11:16] >= "15:55"
+    )
 
 
 def leakage_scan(facts: list[dict], event_date: str) -> list[str]:
@@ -114,13 +255,18 @@ def leakage_scan(facts: list[dict], event_date: str) -> list[str]:
     return hits
 
 
-def assemble(r: dict, mk: dict) -> tuple[dict | None, list[str]]:
+def assemble(r: dict, mk: dict, intraday: dict | None = None,
+             allow_no_intraday: bool = False,
+             searcher: RelatedSearcher | None = None) -> tuple[dict | None, list[str]]:
     """structured 记录 + market 记录 -> (case_json, 审计问题列表)."""
     issues = []
     me = r.get("main_event") or {}
     event_date = me.get("event_date") or r["_triage"]["event_date"]
     facts = me.get("facts_publicly_reported") or []
-    channels = [c.get("channel") for c in me.get("event_influence_channels") or [] if c.get("channel")]
+    # LLM 偶尔把 channels 输出成字符串数组而非 {"channel": ...} 对象数组, 两种形状都收
+    channels = [c.get("channel") if isinstance(c, dict) else c
+                for c in me.get("event_influence_channels") or []]
+    channels = [c for c in channels if isinstance(c, str) and c]
     rel_rows = r.get("relation_rows") or []
     labels = mk["labels"]
     priced = set(mk["priced_symbols"])
@@ -151,15 +297,9 @@ def assemble(r: dict, mk: dict) -> tuple[dict | None, list[str]]:
         "leakage_boundary": LEAKAGE_BOUNDARY,
     }
     sym_panel = mk["market_data_symbols"]
-    pre_start = None
-    for s, panel in sym_panel.items():
-        bars = panel["model_input_ohlcv_adjusted_daily"]
-        if bars:
-            d = bars[0]["date"]
-            pre_start = d if pre_start is None or d < pre_start else pre_start
     src_ids = [f"SRC_{m['id']}" for m in r.get("_source_meta") or []][:8]
 
-    evidence_rows, weak_universe = [], []
+    evidence_rows = []
     for row in rel_rows:
         sym = (row.get("symbol") or "").strip().upper()
         if not sym:
@@ -183,28 +323,31 @@ def assemble(r: dict, mk: dict) -> tuple[dict | None, list[str]]:
             "source_trace": trace,
             "training_treatment_cn": TREATMENT_PRICED_CN if is_priced else TREATMENT_UNPRICED_CN,
         })
-        weak_universe.append({
-            "symbol": sym, "status": "priced_target" if is_priced else "weak_unpriced_candidate",
-            "relation_type": row.get("relation_type") or "related",
-            "why": row.get("impact_path_cn") or row.get("evidence_statement") or "",
-            "suggested_data_source": "already_priced_in_market_data" if is_priced
-                                      else "price_vendor + official/news/social search",
-            "priority": "P0" if is_priced else "P1",
-        })
 
     n_priced = sum(1 for e in evidence_rows if e["priced_label_status"] == "priced_and_labeled")
     if n_priced < 3:
         issues.append(f"已打价标的不足 3 个: {n_priced}")
         return None, issues
 
+    intraday = intraday or {}
+    intraday_symbols = {
+        s: p for s, p in (intraday.get("symbols") or {}).items()
+        if s in priced and complete_intraday_panel(p, event_date)
+    }
+    if not intraday_symbols and not allow_no_intraday:
+        issues.append("缺少已打价标的的完整事件日 1m 分时面板")
+        return None, issues
+    if not intraday_symbols:
+        issues.append("intraday_missing: 缺完整 1m 面板, 降级组装为空占位")
+        intraday_provider = "missing"
+    else:
+        intraday_provider = intraday.get("provider") or "unknown"
+
     case = {
         "schema": SCHEMA,
         "case_id": case_id,
         "case_title": case_title,
-        "display_short_name": r.get("display_short_name") or case_id.split("_")[0],
-        "year": int(event_date[:4]),
         "event_family": r.get("event_family") or r["_triage"].get("event_family") or "other",
-        "objective": OBJECTIVE,
         "main_event": {
             "event_id": case_id,
             "event_subject": me.get("event_subject") or "",
@@ -219,80 +362,37 @@ def assemble(r: dict, mk: dict) -> tuple[dict | None, list[str]]:
                 {"channel": c, "manual_direction": None,
                  "training_role": "learnable_channel_not_manual_score"} for c in channels],
         },
-        "time_dimension_calibration": cal,
-        "data_dimension_contract": DATA_DIMENSION_CONTRACT,
-        "training_time_slices": slice_defs(cal, pre_start or ""),
-        "target_relation_evidence": {"policy": RELATION_POLICY, "rows": evidence_rows},
-        "market_data": {"provider": "Yahoo Finance via yfinance", "adjustment": "auto_adjust=True",
-                        "symbols": sym_panel},
-        "pre_event_price_features": {},
-        "event_text_features": {
-            "event_family": r.get("event_family") or "", "event_type": r.get("event_type") or "",
-            "channels": channels,
-            "instruction": "Use only S0/S1 visible facts and relation context. "
-                           "Predict hidden 1D/5D/20D returns and rank target symbols.",
-        },
-        "prediction_training_task": PREDICTION_TASK,
-        "implemented_data_manifest": [
-            {"data_block": "main_event_facts", "status": "implemented"},
-            {"data_block": "market_ohlcv_panel", "status": "implemented"},
-            {"data_block": "future_return_labels", "status": "implemented"},
-            {"data_block": "weak_association_search_chain", "status": "pending_enhancement_layer"},
-            {"data_block": "expanded_weak_relation_universe", "status": "implemented_structure_only"},
-            {"data_block": "intraday_full_session_volume_panel", "status": "required_p0_schema_ready_data_missing"},
-        ],
-        "intraday_volume_panel": {
-            "status": "missing_real_intraday_for_event_date",
-            "current_sample_gap": "流水线 v1 只填日频 OHLCV；分钟分时面板留待增强层。",
-            "next_build_action": "按 target_symbols 拉取 event_date 全天 1m bars 并补 20 日分钟基线。",
-        },
-        "label_window_confounder_audit": [],
-        "weak_association_ai_search": {
-            "principle": "搜索链分两段：R1-R2 下钻主事件事实、时间和影响通道；R3-R4 外扩弱关联事件、"
-                         "标的和社媒传播；R5 做防泄露、混杂和反事实样本控制。",
-            "rounds": [], "events": [],
-            "status": "pending_enhancement_layer",
-        },
-        "weak_relation_universe": {
-            "policy": WEAK_POLICY,
-            "priced_target_count": n_priced,
-            "weak_symbol_count": len(weak_universe) - n_priced,
-            "symbols": weak_universe,
-        },
         "supervised_targets_hidden_labels": {
             "label_base": "adjusted close-to-close and tradable open-to-close",
             "label_count": len(labels),
             "labels": labels,
             "metrics_to_train": METRICS_TO_TRAIN,
         },
-        "not_in_current_sample": NOT_IN_SAMPLE,
-        "quality_audit": {
-            "official_event_source_count": 1 if me.get("official_source_url") else 0,
-            "priced_target_count": n_priced,
-            "relation_row_count": len(evidence_rows),
-            "weak_candidate_event_count": 0,
-            "confounder_audit_seed_count": 0,
-            "label_complete_1d_5d_20d": all(
-                all(k in l["close_to_close_return_pct"] for k in ("1d", "5d", "20d")) for l in labels),
-            "train_ready_level": "main_chain_ready_enhancement_pending",
-            "known_limitations": ["daily prices only",
-                                  "weak association search chain and confounder audit left empty in pipeline v1"],
-            "leakage_scan_hits": leaks,
-            "structuring_confidence": r.get("confidence"),
-            "pipeline": "event_dataset v1 (index->cluster->triage->structure->label->assemble)",
+        "time_dimension_calibration": cal,
+        "target_relation_evidence": {"policy": RELATION_POLICY, "rows": evidence_rows},
+        "market_data": {"provider": "Yahoo Finance via yfinance", "adjustment": "auto_adjust=True",
+                        "symbols": sym_panel},
+        "intraday_volume_panel": {
+            "provider": intraday_provider,
+            "timezone": intraday.get("timezone") or "America/New_York",
+            "event_date": event_date,
+            "interval": "1m",
+            "session_scope": intraday.get("session_scope") or "regular_session_09:30_16:00_ET",
+            "symbols": intraday_symbols,
         },
-        "provenance": {
-            "event_id_internal": r["_triage"] and r["event_id"],
-            "cluster_stats": {k: r["_triage"].get(k) for k in
-                              ("n_articles", "n_sources", "n_v2_reactions", "significance", "peak_date")},
-            "source_articles": r.get("_source_meta") or [],
-        },
+        "associatin_search": association_search(r, searcher),
     }
+    validation_issues = schema_issues(case)
+    if validation_issues:
+        issues.extend(validation_issues)
+        return None, issues
     return case, issues
 
 
 def run(args) -> None:
     os.makedirs(config.EVENT_FINAL_DIR, exist_ok=True)
+    date = getattr(args, "date", None)
+    allow_no_intraday = getattr(args, "allow_no_intraday", False)
 
     structured = {}
     with open(f"{config.EVENT_STRUCTURED_DIR}/structured.jsonl") as fh:
@@ -300,16 +400,29 @@ def run(args) -> None:
             r = json.loads(line)
             if not r.get("_error"):
                 structured[r["event_id"]] = r
+    if date:
+        structured = {eid: r for eid, r in structured.items()
+                      if (r.get("_triage") or {}).get("peak_date") == date}
     markets = {}
     with open(f"{config.EVENT_MARKET_DIR}/labels.jsonl") as fh:
         for line in fh:
             m = json.loads(line)
             markets[m["event_id"]] = m
+    intraday = {}
+    intraday_path = f"{config.EVENT_MARKET_DIR}/intraday.jsonl"
+    if os.path.exists(intraday_path):
+        with open(intraday_path) as fh:
+            for line in fh:
+                item = json.loads(line)
+                intraday[item["event_id"]] = item
 
+    searcher = RelatedSearcher()
+    if not searcher.available:
+        print("[assemble] index parquet 缺失, associatin_search 仅回填结构化引用来源", flush=True)
     n_ok = n_drop = 0
     seen_case_ids = set()
     all_issues = []
-    manifest = open(f"{config.EVENT_FINAL_DIR}/manifest.jsonl", "w")
+    out = open(f"{config.EVENT_FINAL_DIR}/events.jsonl", "w")
     for eid, r in structured.items():
         if args.max_cases and n_ok >= args.max_cases:
             break
@@ -317,7 +430,7 @@ def run(args) -> None:
         if not mk:
             n_drop += 1
             continue
-        case, issues = assemble(r, mk)
+        case, issues = assemble(r, mk, intraday.get(eid), allow_no_intraday, searcher)
         if issues:
             all_issues.append({"event_id": eid, "issues": issues})
         if case is None:
@@ -327,16 +440,9 @@ def run(args) -> None:
             case["case_id"] = f"{case['case_id']}_{eid[-4:]}"
             case["main_event"]["event_id"] = case["case_id"]
         seen_case_ids.add(case["case_id"])
-        with open(f"{config.EVENT_FINAL_DIR}/{case['case_id']}.json", "w") as fh:
-            json.dump(case, fh, ensure_ascii=False, indent=1)
-        manifest.write(json.dumps({
-            "case_id": case["case_id"], "event_id": eid, "event_date": case["main_event"]["event_date"],
-            "event_type": case["main_event"]["event_type"], "event_family": case["event_family"],
-            "year": case["year"], "n_priced": case["quality_audit"]["priced_target_count"],
-            "title": case["case_title"],
-        }, ensure_ascii=False) + "\n")
+        out.write(json.dumps(case, ensure_ascii=False) + "\n")
         n_ok += 1
-    manifest.close()
+    out.close()
 
     summary = {"structured_in": len(structured), "with_market": sum(1 for e in structured if e in markets),
                "cases_written": n_ok, "dropped": n_drop, "events_with_issues": len(all_issues)}

@@ -6,9 +6,25 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+# 本仓库/worktree 的根目录 (由源码位置推出, 与 shell cwd 无关, 保证分支/worktree 隔离)
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
 # 加载项目根 .env, 让 EVENT_V1_DIR/V2_DIR/OUT_ROOT 等可写在 .env 里
 # (load_dotenv 默认不覆盖已有环境变量, 因此 shell 里的 export 仍然优先)
-load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+load_dotenv(REPO_ROOT / ".env")
+
+
+def _resolve_path(value: str) -> str:
+    """展开路径里的 $PWD/${PWD} 及其它环境变量.
+
+    .env 里为可读写成 `$PWD/data/...`; python-dotenv 直接读取时不会展开 $PWD,
+    只有 shell `source .env` 才会. 这里统一把 $PWD 按本仓库的 REPO_ROOT 展开,
+    使 `python -m src.main ...` 无论是否 source、cwd 在哪都指向本分支自己的 data.
+    已是绝对路径(如服务器 /mnt/... 或已 source 的展开值)时为无操作.
+    """
+    return os.path.expandvars(
+        value.replace("${PWD}", str(REPO_ROOT)).replace("$PWD", str(REPO_ROOT))
+    )
 
 DEFAULT_PAYLOAD_PART_BYTES = 512 * 1024 * 1024
 
@@ -55,9 +71,9 @@ NEAR_MAX_REPORT_PAIRS = 10_000  # near_duplicates.jsonl 最多写入对数
 # --- eventpack: 事件训练包流水线 (extract/complete 阶段) ---
 # 三个根目录支持环境变量覆盖: 本地开发时 export EVENT_V1_DIR/V2_DIR/OUT_ROOT
 # 指向下载的窗口子集即可, 不改这里的默认值(服务器全量跑不受影响)
-EVENT_V1_DIR = os.environ.get("EVENT_V1_DIR", "/mnt/ainvest_content/v3/v1")  # 清洗后新闻语料(仅精确去重)
-EVENT_V2_DIR = os.environ.get("EVENT_V2_DIR", "/mnt/ainvest_content/v3/v2")  # 研报/电话会段落
-EVENT_OUT_ROOT = os.environ.get("EVENT_OUT_ROOT", "/mnt/ainvest_content/v3/event_dataset")
+EVENT_V1_DIR = _resolve_path(os.environ.get("EVENT_V1_DIR", "/mnt/ainvest_content/v3/v1"))  # 清洗后新闻语料(仅精确去重)
+EVENT_V2_DIR = _resolve_path(os.environ.get("EVENT_V2_DIR", "/mnt/ainvest_content/v3/v2"))  # 研报/电话会段落
+EVENT_OUT_ROOT = _resolve_path(os.environ.get("EVENT_OUT_ROOT", "/mnt/ainvest_content/v3/event_dataset"))
 EVENT_INDEX_DIR = f"{EVENT_OUT_ROOT}/index"
 EVENT_CANDIDATE_DIR = f"{EVENT_OUT_ROOT}/candidates"
 EVENT_SELECTED_DIR = f"{EVENT_OUT_ROOT}/selected"
@@ -65,6 +81,10 @@ EVENT_STRUCTURED_DIR = f"{EVENT_OUT_ROOT}/structured"
 EVENT_MARKET_DIR = f"{EVENT_OUT_ROOT}/market"
 EVENT_FINAL_DIR = f"{EVENT_OUT_ROOT}/final"
 EVENT_REPORT_DIR = f"{EVENT_OUT_ROOT}/reports"
+# notice 8-K 抽取(直接读 export 原文件; 默认派生自 EVENT_V1_DIR/EVENT_V2_DIR, 可用环境变量覆盖)
+EVENT_NOTICE_SRC = _resolve_path(os.environ.get("EVENT_NOTICE_SRC", f"{EVENT_V1_DIR}/US_NOTICE.jsonl"))
+EVENT_NOTICE_V2 = _resolve_path(os.environ.get("EVENT_NOTICE_V2", f"{EVENT_V2_DIR}/notice.jsonl"))
+EVENT_NOTICE_8K_DIR = f"{EVENT_OUT_ROOT}/notice_8k"
 # ceph-fuse 并发红线: 实测 48 卡死 / 12 拥塞 / 6 正常, 禁超 10
 EVENT_INDEX_WORKERS = 6
 EVENT_TITLE_MAX_CHARS = 400

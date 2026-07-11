@@ -193,12 +193,18 @@ def _write_sympairs(pairs: Counter, base: str) -> None:
     os.replace(dst + ".tmp", dst)
 
 
+def discover_jsonl(dir_path: str) -> list[str]:
+    """服务器命名 cleaned_batch*.jsonl 优先; 本地窗口子集(US_*.jsonl 等)回退到 *.jsonl."""
+    files = sorted(glob.glob(f"{dir_path}/cleaned_batch*.jsonl"))
+    return files or sorted(glob.glob(f"{dir_path}/*.jsonl"))
+
+
 def run(args: argparse.Namespace) -> None:
     os.makedirs(config.EVENT_INDEX_DIR, exist_ok=True)
     os.makedirs(config.EVENT_REPORT_DIR, exist_ok=True)
 
-    v1 = sorted(glob.glob(f"{config.EVENT_V1_DIR}/cleaned_batch*.jsonl"))
-    v2 = sorted(glob.glob(f"{config.EVENT_V2_DIR}/cleaned_batch*.jsonl"))
+    v1 = discover_jsonl(config.EVENT_V1_DIR)
+    v2 = discover_jsonl(config.EVENT_V2_DIR)
     if args.limit:
         v1, v2 = v1[: args.limit], v2[: args.limit]
     jobs = [("v1", p) for p in v1] + [("v2", p) for p in v2]

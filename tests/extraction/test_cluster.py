@@ -26,3 +26,10 @@ def test_cluster_bucket_window_split():
         _item("Acme Corp announces quarterly dividend increase", "2026-03-01"),
     ]
     assert len(cluster.cluster_bucket(items)) == 2  # 超出 3 天窗不连边
+
+
+def test_pub_date_between_clause():
+    from src.extraction.cluster import pub_date_between
+    assert pub_date_between(None) == ""
+    clause = pub_date_between("2026-05-29")
+    assert clause == " AND pub_date BETWEEN '2026-05-22' AND '2026-06-05'"

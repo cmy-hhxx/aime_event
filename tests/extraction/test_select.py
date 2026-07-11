@@ -52,3 +52,11 @@ def test_final_select_malformed_date_falls_back():
     triage = {"E1": _triage(3, date="2025/03/15")}  # 长度10但非ISO, 必须回退 peak_date
     picked = select.final_select(cands, triage, 3, 12)
     assert picked[0]["event_date"] == "2025-01-10"
+
+
+def test_gate_where_with_date():
+    from src.extraction.select import gate_where
+    base = gate_where("2023-07-01", 5, 3, 2)
+    dated = gate_where("2023-07-01", 5, 3, 2, date="2026-05-29")
+    assert dated == f"({base}) AND peak_date = '2026-05-29'"
+    assert gate_where("2023-07-01", 5, 3, 2, date=None) == base

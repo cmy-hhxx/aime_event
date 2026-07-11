@@ -3,7 +3,7 @@
   "title": "FinancialPredictionTrainingCaseV4",
   "description": "事件最终格式要求。",
   "type": "object",
-  "additionalProperties": true,
+  "additionalProperties": false,
   "required": ["schema", "case_id", "case_title", "event_family", "main_event",
                "supervised_targets_hidden_labels", "time_dimension_calibration",
                "target_relation_evidence", "market_data", "intraday_volume_panel",
@@ -11,6 +11,8 @@
   "properties": {
     "schema": {"const": "FinancialPredictionTrainingCase.v4.three_year_event_signal_pack"},
     "case_id": {"type": "string", "pattern": "^[A-Z0-9][A-Z0-9_]{5,90}$"},
+    "case_title": {"type": "string"},
+    "event_family": {"type": "string"},
     "main_event": {
       "type": "object",
       "required": ["event_id", "event_date", "event_type", "facts_publicly_reported",
@@ -125,7 +127,6 @@
         "session_scope": {"type": "string", "minLength": 1},
         "symbols": {
           "type": "object",
-          "minProperties": 1,
           "patternProperties": {
             "^[A-Z][A-Z0-9.\\-]{0,9}$": {
               "type": "object",

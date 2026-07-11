@@ -10,7 +10,7 @@
   -> extract (index -> cluster -> select -> structure)
 /mnt/ainvest_content/v3/event_dataset/structured/structured.jsonl
   -> complete (fetch[本地Mac] -> label -> assemble)
-/mnt/ainvest_content/v3/event_dataset/final/<CASE_ID>.json  v4 事件训练包成品
+/mnt/ainvest_content/v3/event_dataset/final/events.jsonl    v4 事件训练包成品(一行一个)
 ```
 
 ## 0. 环境准备
@@ -84,6 +84,20 @@ nohup .venv/bin/python -m src.main extract structure \
   > /mnt/ainvest_content/v3/event_dataset/reports/structure.log 2>&1 &
 ```
 
+## 4b. extract notice8k（可选：8-K 公告事件，独立轨）
+
+```bash
+# 规则抽取当日 8-K 事件行(零 LLM; 扫 US_NOTICE + v2 notice 补全文):
+.venv/bin/python -m src.main extract notice8k --date 2026-05-29
+# LLM triage 入选 -> selected/selected_8k.jsonl (断点续跑; 先 --limit 5 冒烟):
+.venv/bin/python -m src.main extract notice8k-select --date 2026-05-29
+# 之后正常跑 select(新闻, 会对 EVT8K 去重) -> structure(自动合并 8-K 入选) -> complete
+```
+
+- **顺序重要**：8-K 是原始披露先到，新闻 `select` 对已存在的 EVT8K 事件去重（同主
+  symbol 且同日或同类型±3天），所以 notice8k-select 要在新闻 select **之前**跑，
+  详见 extraction.md
+
 ## 5. complete fetch（本地 Mac 跑——服务器连不上 Yahoo）
 
 ```bash
@@ -96,15 +110,23 @@ ssh pdf2json 'mkdir -p /mnt/ainvest_content/v3/event_dataset/market'
 scp ~/event_e/prices_daily.parquet pdf2json:/mnt/ainvest_content/v3/event_dataset/market/
 ```
 
+分时另行补齐。Yahoo 1m 实际只保留最近约 30 天；超窗日期（如 2026-05-29）
+需从其他行情源导出逐 bar JSONL，再导入：
+
+```bash
+.venv/bin/python -m src.main complete import-intraday \
+  --input /path/to/2026-05-29.intraday.jsonl --provider <provider-name>
+```
+
 ## 6. complete label + assemble（容器，纯计算，分钟级）
 
 ```bash
-.venv/bin/python -m src.main complete all   # = label -> assemble
+.venv/bin/python -m src.main complete all   # = label -> assemble；缺完整 1m 的事件不会落 final
 ```
 
 - `reports/stage_label_summary.json`: `labeled`/`skipped_few_symbols`（窗口不完整或 <3 有效标的作废，正常损耗）
 - `reports/stage_assemble_summary.json`: `cases_written`/`events_with_issues`（泄露扫描/结构审计命中，需抽查）
-- 成品: `final/<CASE_ID>.json` + `final/manifest.jsonl`
+- 成品: `final/events.jsonl`(一行一个完整事件包, 覆盖式)
 
 ## 常见问题
 
@@ -119,8 +141,7 @@ scp ~/event_e/prices_daily.parquet pdf2json:/mnt/ainvest_content/v3/event_datase
 
 把以下发给数据集负责人做质量审计：
 1. `reports/` 下全部 `*_summary.json`
-2. `final/manifest.jsonl`
-3. 随机 3 个 `final/*.json`（与 `事件格式.json` 逐字段核对）
+2. `final/events.jsonl`（随机抽 3 行与 `事件格式.json` 逐字段核对）
 
 旧命令兼容性：`clean` 与旧 `run/fresh/export` 入口不变；`run-all` 已移除
 （select 需人工定阈值，无法无人值守串联全程）。

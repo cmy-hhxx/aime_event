@@ -21,6 +21,9 @@ python3 -m venv .venv
 .venv/bin/python -m src.main extract structure --limit 5   # 验收后去掉 --limit
 # 事件补全(fetch 在本地 Mac 跑, 见 docs/pipeline.md):
 .venv/bin/python -m src.main complete fetch --structured ... --outdir ...
+.venv/bin/python -m src.main complete fetch-intraday --event-date YYYY-MM-DD
+# Yahoo 1m 超出最近 30 天时：
+.venv/bin/python -m src.main complete import-intraday --input ... --provider ...
 .venv/bin/python -m src.main complete all   # = label -> assemble
 ```
 

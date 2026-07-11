@@ -1,11 +1,14 @@
-"""Stage E: yfinance 行情对齐 + 1D/5D/20D 隐藏标签.
+"""Stage E: yfinance 日线/分时行情对齐 + 1D/5D/20D 隐藏标签.
 
 两步:
   fetch  - 汇总所有事件的 symbol, 每个 symbol 拉一次全时段日线(auto_adjust), 存 prices_daily.parquet
            (可在服务器或本地 Mac 跑, 谁的网络好用谁; 面板文件可搬运)
   label  - 离线计算: base_close/first_tradable 日历规则, S0 可见窗口, 1D/5D/20D 标签, 截面排名
 
-输出: market/prices_daily.parquet, market/labels.jsonl, reports/stage_label_summary.json
+  fetch-intraday - 拉事件日常规交易时段 1m OHLCV, 存 intraday.jsonl
+
+输出: market/prices_daily.parquet, market/intraday.jsonl, market/labels.jsonl,
+      reports/stage_label_summary.json
 """
 from __future__ import annotations
 
@@ -13,13 +16,16 @@ import json
 import os
 import re
 import time
+from collections import defaultdict
+from datetime import date, timedelta
 
 from src import config
 
 SYM_RE = re.compile(r"^[A-Z][A-Z0-9.\-]{0,5}$")
 ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 PRE_SESSIONS = 15    # S0 事件前可见交易日数
-POST_SESSIONS = 26   # 标签审计窗交易日数(>=20d horizon + 余量)
+POST_SESSIONS = 20   # schema 要求的 20D 标签审计窗
+MIN_COMPLETE_1M_BARS = 380  # 常规美股交易日理论 390 根, 容许少量无成交分钟
 
 
 def load_structured(path: str) -> list[dict]:
@@ -31,6 +37,13 @@ def load_structured(path: str) -> list[dict]:
                 continue
             out.append(r)
     return out
+
+
+def filter_by_peak_date(events: list[dict], date: str | None) -> list[dict]:
+    """--date 单日跑: 按 triage 报道高峰日过滤(与 select --date 同口径)."""
+    if not date:
+        return events
+    return [r for r in events if (r.get("_triage") or {}).get("peak_date") == date]
 
 
 def event_symbols(r: dict) -> list[str]:
@@ -52,7 +65,9 @@ def run_fetch(args) -> None:
     import yfinance as yf
 
     os.makedirs(args.outdir, exist_ok=True)
+    os.makedirs(config.EVENT_REPORT_DIR, exist_ok=True)
     events = load_structured(args.structured)
+    events = filter_by_peak_date(events, getattr(args, "date", None))
     all_syms = sorted({s for r in events for s in event_symbols(r)})
     print(f"[fetch] 事件 {len(events)}, 去重 symbol {len(all_syms)}", flush=True)
 
@@ -103,6 +118,174 @@ def run_fetch(args) -> None:
     print(f"[fetch] 完成, 失败 symbol: {len(set(failed))}", flush=True)
 
 
+# ---------------- fetch intraday ----------------
+def _f(value: object) -> float:
+    return round(float(value), 6)
+
+
+def build_intraday_symbol_panel(df, event_date: str) -> dict | None:
+    """把 yfinance 单标的 1m DataFrame 规范化为 final schema 的 symbol panel.
+
+    Yahoo 不提供逐分钟成交笔数或交易所 VWAP。为保持 schema 不变，trade_count
+    使用兼容值 0；vwap 使用分钟 typical-price 代理，并在 final quality_audit 中披露。
+    只有覆盖常规交易时段首尾且 bar 数充足的面板才返回。
+    """
+    import pandas as pd
+
+    if df is None or df.empty:
+        return None
+    frame = df.copy()
+    if isinstance(frame.columns, pd.MultiIndex):
+        frame.columns = frame.columns.get_level_values(0)
+    required = {"Open", "High", "Low", "Close", "Volume"}
+    if not required.issubset(frame.columns):
+        return None
+    frame = frame.dropna(subset=["Open", "High", "Low", "Close"])
+    if frame.empty:
+        return None
+    idx = pd.DatetimeIndex(frame.index)
+    if idx.tz is None:
+        idx = idx.tz_localize("UTC")
+    idx = idx.tz_convert("America/New_York")
+    frame.index = idx
+    frame = frame[frame.index.strftime("%Y-%m-%d") == event_date]
+    frame = frame.between_time("09:30", "15:59")
+    if frame.empty:
+        return None
+    first_hm = frame.index[0].strftime("%H:%M")
+    last_hm = frame.index[-1].strftime("%H:%M")
+    complete = len(frame) >= MIN_COMPLETE_1M_BARS and first_hm <= "09:35" and last_hm >= "15:55"
+    if not complete:
+        return None
+
+    bars = []
+    for ts, row in frame.iterrows():
+        typical = (float(row["High"]) + float(row["Low"]) + float(row["Close"])) / 3
+        volume = max(0, int(row["Volume"] or 0))
+        bars.append({
+            "timestamp_et": ts.strftime("%Y-%m-%d %H:%M:%S"),
+            "open": _f(row["Open"]), "high": _f(row["High"]),
+            "low": _f(row["Low"]), "close": _f(row["Close"]),
+            "volume": volume,
+            "vwap": _f(typical),
+            "trade_count": 0,
+            "dollar_volume": _f(typical * volume),
+        })
+    return {
+        "session_start_et": bars[0]["timestamp_et"],
+        "session_end_et": bars[-1]["timestamp_et"],
+        "bar_count": len(bars),
+        "is_complete_session": True,
+        "bars": bars,
+    }
+
+
+def run_fetch_intraday(args) -> None:
+    """按事件逐标的拉取 Yahoo 实际近 30 天内可用的 yfinance 1m 面板。"""
+    import yfinance as yf
+
+    os.makedirs(args.outdir, exist_ok=True)
+    os.makedirs(config.EVENT_REPORT_DIR, exist_ok=True)
+    events = load_structured(args.structured)
+    if args.event_date:
+        events = [r for r in events if ((r.get("main_event") or {}).get("event_date")
+                                        or r.get("_triage", {}).get("event_date")) == args.event_date]
+    out_path = os.path.join(args.outdir, "intraday.jsonl")
+    n_symbols = n_complete = 0
+    with open(out_path, "w") as out:
+        for i, r in enumerate(events, 1):
+            event_date = ((r.get("main_event") or {}).get("event_date")
+                          or r.get("_triage", {}).get("event_date"))
+            if not (isinstance(event_date, str) and ISO_DATE_RE.match(event_date)):
+                continue
+            end = (date.fromisoformat(event_date) + timedelta(days=1)).isoformat()
+            symbols, failed = {}, []
+            for symbol in event_symbols(r):
+                n_symbols += 1
+                try:
+                    df = yf.download(symbol, start=event_date, end=end, interval="1m",
+                                     auto_adjust=False, prepost=False, actions=False,
+                                     repair=True, progress=False, threads=False)
+                    panel = build_intraday_symbol_panel(df, event_date)
+                except Exception as exc:
+                    print(f"[intraday] {r['event_id']} {symbol} 失败: {exc}", flush=True)
+                    panel = None
+                if panel is None:
+                    failed.append(symbol)
+                else:
+                    symbols[symbol] = panel
+                    n_complete += 1
+                time.sleep(args.pause)
+            out.write(json.dumps({
+                "event_id": r["event_id"], "event_date": event_date,
+                "provider": "Yahoo Finance via yfinance",
+                "timezone": "America/New_York", "interval": "1m",
+                "session_scope": "regular_session_09:30_16:00_ET",
+                "symbols": symbols, "failed_symbols": failed,
+            }, ensure_ascii=False) + "\n")
+            print(f"[intraday] {i}/{len(events)} {r['event_id']} complete={len(symbols)} "
+                  f"failed={len(failed)}", flush=True)
+    summary = {"events": len(events), "symbols_requested": n_symbols,
+               "complete_symbol_panels": n_complete, "output": out_path}
+    with open(f"{config.EVENT_REPORT_DIR}/stage_intraday_summary.json", "w") as fh:
+        json.dump(summary, fh, ensure_ascii=False, indent=2)
+    print(json.dumps(summary, ensure_ascii=False), flush=True)
+
+
+def run_import_intraday(args) -> None:
+    """导入逐分钟 JSONL。
+
+    输入每行一根 bar，必需字段：event_id,event_date,symbol,timestamp_et,
+    open,high,low,close,volume,vwap,trade_count,dollar_volume。
+    """
+    os.makedirs(args.outdir, exist_ok=True)
+    os.makedirs(config.EVENT_REPORT_DIR, exist_ok=True)
+    grouped: dict[tuple[str, str, str], list[dict]] = defaultdict(list)
+    required = ("timestamp_et", "open", "high", "low", "close", "volume",
+                "vwap", "trade_count", "dollar_volume")
+    with open(args.input) as fh:
+        for line_no, line in enumerate(fh, 1):
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            missing = [k for k in ("event_id", "event_date", "symbol", *required) if row.get(k) is None]
+            if missing:
+                raise ValueError(f"intraday 输入第 {line_no} 行缺字段: {','.join(missing)}")
+            key = (str(row["event_id"]), str(row["event_date"]), str(row["symbol"]).upper())
+            grouped[key].append({k: row[k] for k in required})
+
+    by_event: dict[tuple[str, str], dict[str, dict]] = defaultdict(dict)
+    rejected = []
+    for (event_id, event_date, symbol), bars in grouped.items():
+        bars.sort(key=lambda b: b["timestamp_et"])
+        complete = (len(bars) >= MIN_COMPLETE_1M_BARS
+                    and bars[0]["timestamp_et"][11:16] <= "09:35"
+                    and bars[-1]["timestamp_et"][11:16] >= "15:55")
+        if not complete:
+            rejected.append({"event_id": event_id, "symbol": symbol, "bars": len(bars)})
+            continue
+        by_event[(event_id, event_date)][symbol] = {
+            "session_start_et": bars[0]["timestamp_et"],
+            "session_end_et": bars[-1]["timestamp_et"],
+            "bar_count": len(bars), "is_complete_session": True, "bars": bars,
+        }
+
+    out_path = os.path.join(args.outdir, "intraday.jsonl")
+    with open(out_path, "w") as out:
+        for (event_id, event_date), symbols in sorted(by_event.items()):
+            out.write(json.dumps({
+                "event_id": event_id, "event_date": event_date,
+                "provider": args.provider, "timezone": "America/New_York",
+                "interval": "1m", "session_scope": "regular_session_09:30_16:00_ET",
+                "symbols": symbols, "failed_symbols": [],
+            }, ensure_ascii=False) + "\n")
+    summary = {"events": len(by_event), "complete_symbol_panels": sum(map(len, by_event.values())),
+               "rejected_panels": rejected, "output": out_path}
+    with open(f"{config.EVENT_REPORT_DIR}/stage_intraday_import_summary.json", "w") as fh:
+        json.dump(summary, fh, ensure_ascii=False, indent=2)
+    print(json.dumps(summary, ensure_ascii=False), flush=True)
+
+
 # ---------------- label ----------------
 def pct(a: float, b: float) -> float:
     return round((b / a - 1) * 100, 3)
@@ -122,6 +305,7 @@ def run_label(args) -> None:
     import pandas as pd
 
     events = load_structured(f"{config.EVENT_STRUCTURED_DIR}/structured.jsonl")
+    events = filter_by_peak_date(events, getattr(args, "date", None))
     panel = pd.read_parquet(f"{config.EVENT_MARKET_DIR}/prices_daily.parquet")
     panel = panel.sort_values(["symbol", "date"])
     by_sym = {s: g.reset_index(drop=True) for s, g in panel.groupby("symbol")}
@@ -148,7 +332,7 @@ def run_label(args) -> None:
                 dates = g["date"].tolist()
                 # base_close: pre_market 事件用前一交易日, 其余用事件日(或其前最近交易日)
                 bi, ft = base_ft_indices(dates, ev_date, bucket)
-                if bi < PRE_SESSIONS or ft + POST_SESSIONS >= len(dates):
+                if bi < PRE_SESSIONS or ft + POST_SESSIONS > len(dates):
                     continue  # 窗口不完整(新股/退市/数据缺失)
                 win = g.iloc[bi - PRE_SESSIONS + 1: bi + 1]
                 audit = g.iloc[ft: ft + POST_SESSIONS]

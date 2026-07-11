@@ -23,3 +23,14 @@ def test_v1_extract_notice():
     row = index.v1_extract(rec)
     assert row["accession"] == "000119" and row["pub_date"] == "2014-06-03"
     assert row["symbols"] == "" and row["body_len"] == 0
+
+
+def test_discover_jsonl_falls_back_to_any_jsonl(tmp_path):
+    from src.extraction.index import discover_jsonl
+    # 服务器命名优先: 有 cleaned_batch 时只取它
+    (tmp_path / "cleaned_batch001.jsonl").write_text("")
+    (tmp_path / "US_NEWS.jsonl").write_text("")
+    assert [p.split("/")[-1] for p in discover_jsonl(str(tmp_path))] == ["cleaned_batch001.jsonl"]
+    # 本地窗口子集: 无 cleaned_batch 时回退到全部 *.jsonl
+    (tmp_path / "cleaned_batch001.jsonl").unlink()
+    assert [p.split("/")[-1] for p in discover_jsonl(str(tmp_path))] == ["US_NEWS.jsonl"]

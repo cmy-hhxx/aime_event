@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Notice8kEvent",
+  "description": "extract notice8k 产物 US_NOTICE.8k.<window>.jsonl 单行(纯机械投影, 无 LLM)。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["trace_id", "event_date", "body_source"],
+  "properties": {
+    "trace_id": {"type": "string", "minLength": 1,
+                 "description": "主键: 溯源到 US_NOTICE.jsonl 的记录 id"},
+    "event_title": {"type": ["string", "null"],
+                    "description": "native=body 首句; v2=Item 标题(回退首句)"},
+    "cik": {"type": ["string", "null"], "pattern": "^\\d+$",
+            "description": "SEC 公司号, 取自 8-K 附件 url edgar/data/<CIK>/"},
+    "accession": {"type": ["string", "null"], "pattern": "^\\d{18}$",
+                  "description": "SEC 申报主键(去横杠 18 位)"},
+    "event_date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                   "description": "SEC 申报日 notice.declare_date"},
+    "item_code": {"type": ["string", "null"], "pattern": "^\\d\\.\\d{2}$",
+                  "description": "8-K 条目号(事件类型), 如 5.02; 从 SEC 全文 Item 行抽"},
+    "summary": {"type": ["string", "null"],
+                "description": "事件正文: native 自带 body, v2 为拼接 SEC 全文"},
+    "body_source": {"type": "string", "enum": ["native", "v2_notice", "none"],
+                    "description": "summary 来源"},
+    "source_url": {"type": ["string", "null"],
+                   "description": "8-K 原文 EDGAR 直链"}
+  }
+}

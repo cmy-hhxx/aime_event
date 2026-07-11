@@ -4,7 +4,9 @@
                或 (>=EVENT_RECENT_ALT_MIN_ARTICLES 且 n_v2_reactions>=1);
                early n_articles>=EVENT_EARLY_MIN_ARTICLES
   入选门(LLM):  is_valid_event 且 significance>=EVENT_MIN_SIGNIFICANCE
-  质量护栏:    (event_type,event_date,主体) 去重; 单 symbol 上限(0=关闭)
+  质量护栏:    (event_type,event_date,主体) 去重; 单 symbol 上限(0=关闭);
+               对已存在的 8-K 事件(selected_8k.jsonl)跨源去重——8-K 是原始披露先到,
+               新闻侧同主体同事件(同日, 或同类型且日期差<=3天)让位
   --sweep:     不调 API, 输出阈值->送审量对照表供人工定阈值
 """
 from __future__ import annotations
@@ -25,14 +27,19 @@ from src.extraction import prompts
 ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
-def gate_where(era_split: str, recent_min: int, recent_alt_min: int, early_min: int) -> str:
-    return (f"(peak_date >= '{era_split}' AND (n_articles >= {recent_min} "
-            f"OR (n_articles >= {recent_alt_min} AND n_v2_reactions >= 1))) "
-            f"OR (peak_date < '{era_split}' AND n_articles >= {early_min})")
+def gate_where(era_split: str, recent_min: int, recent_alt_min: int, early_min: int,
+               date: str | None = None) -> str:
+    where = (f"(peak_date >= '{era_split}' AND (n_articles >= {recent_min} "
+             f"OR (n_articles >= {recent_alt_min} AND n_v2_reactions >= 1))) "
+             f"OR (peak_date < '{era_split}' AND n_articles >= {early_min})")
+    if date:
+        where = f"({where}) AND peak_date = '{date}'"
+    return where
 
 
-def build_candidates(con, recent_min: int, recent_alt_min: int, early_min: int) -> list[dict]:
-    where = gate_where(config.EVENT_ERA_SPLIT, recent_min, recent_alt_min, early_min)
+def build_candidates(con, recent_min: int, recent_alt_min: int, early_min: int,
+                     date: str | None = None) -> list[dict]:
+    where = gate_where(config.EVENT_ERA_SPLIT, recent_min, recent_alt_min, early_min, date)
     return con.execute(f"""
       SELECT event_id, peak_date, first_date, last_date, n_articles, n_sources,
              n_content_types, n_high, n_v2_reactions, track, rep_title, all_symbols,
@@ -47,14 +54,14 @@ def build_candidates(con, recent_min: int, recent_alt_min: int, early_min: int) 
     """).fetch_arrow_table().to_pylist()
 
 
-def sweep(con) -> None:
+def sweep(con, date: str | None = None) -> None:
     print(f"{'recent_min':>10} {'alt_min':>8} {'early_min':>9} {'recent送审':>10} {'early送审':>9} {'合计':>8}")
     for rm in (3, 4, 5, 6, 8):
         for am in (2, 3):
             if am > rm:
                 continue
             for em in (2, 3):
-                where = gate_where(config.EVENT_ERA_SPLIT, rm, am, em)
+                where = gate_where(config.EVENT_ERA_SPLIT, rm, am, em, date)
                 r, e = con.execute(f"""
                   SELECT sum(CASE WHEN peak_date >= '{config.EVENT_ERA_SPLIT}' THEN 1 ELSE 0 END),
                          sum(CASE WHEN peak_date < '{config.EVENT_ERA_SPLIT}' THEN 1 ELSE 0 END)
@@ -128,17 +135,63 @@ def final_select(cands: list[dict], triage: dict[str, dict],
     return picked
 
 
+def _days_apart(d1: str, d2: str) -> int:
+    from datetime import date as _d
+    try:
+        return abs((_d.fromisoformat(d1) - _d.fromisoformat(d2)).days)
+    except ValueError:
+        return 999
+
+
+def dedup_vs_8k(picked: list[dict], window_days: int = 3) -> tuple[list[dict], int]:
+    """对已存在的 EVT8K 事件跨源去重: 8-K 是原始披露、先到, 新闻让位.
+
+    撞车判定: 共享主 symbol 且 (事件日相同, 或 同 event_type 且日期差<=window_days)。
+    后者覆盖 8-K 盘后申报、新闻 T+1 才铺开的时间错位; 类型不同(如财报 8-K vs 次日
+    分析师评级)视为衍生新事件, 保留。
+    """
+    path = f"{config.EVENT_SELECTED_DIR}/selected_8k.jsonl"
+    if not os.path.exists(path):
+        return picked, 0
+    by_sym: dict[str, list[tuple[str, str]]] = defaultdict(list)  # sym -> [(date, type)]
+    with open(path) as fh:
+        for line in fh:
+            if not line.strip():
+                continue
+            e = json.loads(line)
+            for s in e.get("primary_symbols") or []:
+                by_sym[s].append((e.get("event_date") or "", e.get("event_type") or ""))
+    kept, dropped = [], 0
+    for v in picked:
+        hit = False
+        for s in v.get("primary_symbols") or []:
+            for d8, t8 in by_sym.get(s, ()):
+                if v["event_date"] == d8 or (v.get("event_type") == t8
+                                             and _days_apart(v["event_date"], d8) <= window_days):
+                    hit = True
+                    break
+            if hit:
+                break
+        if hit:
+            dropped += 1
+        else:
+            kept.append(v)
+    return kept, dropped
+
+
 def run(args) -> None:
     os.makedirs(config.EVENT_SELECTED_DIR, exist_ok=True)
     os.makedirs(config.EVENT_REPORT_DIR, exist_ok=True)
     t0 = time.time()
     con = duckdb.connect()
     con.execute("SET threads TO 32")
+    date = getattr(args, "date", None)
     if args.sweep:
-        sweep(con)
+        sweep(con, date)
         return
     cands = build_candidates(con, config.EVENT_RECENT_MIN_ARTICLES,
-                             config.EVENT_RECENT_ALT_MIN_ARTICLES, config.EVENT_EARLY_MIN_ARTICLES)
+                             config.EVENT_RECENT_ALT_MIN_ARTICLES,
+                             config.EVENT_EARLY_MIN_ARTICLES, date)
     total_cands = len(cands)
     if getattr(args, "limit", 0):
         cands = cands[: args.limit]
@@ -154,12 +207,14 @@ def run(args) -> None:
                                   f"{config.EVENT_SELECTED_DIR}/triage.jsonl",
                                   workers=args.triage_workers, desc="triage")
     picked = final_select(cands, triage, config.EVENT_MIN_SIGNIFICANCE, config.EVENT_PER_SYMBOL_CAP)
+    picked, deduped_vs_8k = dedup_vs_8k(picked)
     with open(f"{config.EVENT_SELECTED_DIR}/selected_events.jsonl", "w") as fh:
         for v in picked:
             v.pop("_titles", None)
             fh.write(json.dumps(v, ensure_ascii=False) + "\n")
     summary = {
         "candidates_triaged": len(cands), "selected": len(picked),
+        "deduped_vs_8k": deduped_vs_8k,
         "by_era": dict(Counter("recent" if v["is_recent"] else "early" for v in picked)),
         "by_type": dict(Counter(v["event_type"] for v in picked).most_common()),
         "elapsed_sec": round(time.time() - t0, 1),
