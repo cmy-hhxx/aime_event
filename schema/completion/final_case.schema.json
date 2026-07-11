@@ -1,16 +1,16 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "FinancialPredictionTrainingCaseV4",
-  "description": "complete assemble 产物 final/<CASE_ID>.json 关键字段校验(增强层允许留空占位)。",
+  "description": "事件最终格式要求。",
   "type": "object",
   "additionalProperties": true,
-  "required": ["schema", "case_id", "case_title", "year", "event_family", "main_event",
-               "time_dimension_calibration", "target_relation_evidence", "market_data",
-               "supervised_targets_hidden_labels", "quality_audit"],
+  "required": ["schema", "case_id", "case_title", "event_family", "main_event",
+               "supervised_targets_hidden_labels", "time_dimension_calibration",
+               "target_relation_evidence", "market_data", "intraday_volume_panel",
+               "associatin_search"],
   "properties": {
     "schema": {"const": "FinancialPredictionTrainingCase.v4.three_year_event_signal_pack"},
     "case_id": {"type": "string", "pattern": "^[A-Z0-9][A-Z0-9_]{5,90}$"},
-    "year": {"type": "integer", "minimum": 2000},
     "main_event": {
       "type": "object",
       "required": ["event_id", "event_date", "event_type", "facts_publicly_reported",
@@ -21,13 +21,276 @@
         "event_influence_channels": {"type": "array", "minItems": 2}
       }
     },
+    "supervised_targets_hidden_labels": {
+      "type": "object",
+      "properties": {"labels": {"type": "array", "minItems": 3}}
+    },
+    "time_dimension_calibration": {
+      "type": "object",
+      "required": ["event_natural_date", "base_close_date", "first_tradable_session",
+                   "label_dates", "label_window", "leakage_boundary"],
+      "properties": {
+        "event_natural_date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+        "base_close_date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+        "first_tradable_session": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+        "label_dates": {
+          "type": "object",
+          "required": ["1d", "5d", "20d"],
+          "properties": {
+            "1d": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+            "5d": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+            "20d": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"}
+          }
+        },
+        "label_window": {"type": "string"},
+        "leakage_boundary": {"type": "string"}
+      }
+    },
     "target_relation_evidence": {
       "type": "object",
       "properties": {"rows": {"type": "array", "minItems": 5}}
     },
-    "supervised_targets_hidden_labels": {
+    "market_data": {
       "type": "object",
-      "properties": {"labels": {"type": "array", "minItems": 3}}
+      "description": "日频行情面板。model_input 仅保留截止 base_close_date 的模型可见窗口；label_audit 保留 first_tradable_session 起的未来行情，仅用于构造和复核隐藏标签。",
+      "additionalProperties": false,
+      "required": ["provider", "adjustment", "symbols"],
+      "properties": {
+        "provider": {"type": "string", "minLength": 1},
+        "adjustment": {"type": "string", "minLength": 1},
+        "symbols": {
+          "type": "object",
+          "description": "按交易代码索引的多标的日频行情；完整训练样本至少包含 3 个已打价标的。",
+          "minProperties": 3,
+          "patternProperties": {
+            "^[A-Z][A-Z0-9.\\-]{0,9}$": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["model_input_ohlcv_adjusted_daily",
+                           "label_audit_ohlcv_adjusted_daily"],
+              "properties": {
+                "model_input_ohlcv_adjusted_daily": {
+                  "type": "array",
+                  "description": "事件前模型可见的复权日频 OHLCV，最后一条不得晚于 base_close_date。",
+                  "minItems": 1,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["date", "open", "high", "low", "close", "volume"],
+                    "properties": {
+                      "date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+                      "open": {"type": "number", "exclusiveMinimum": 0},
+                      "high": {"type": "number", "exclusiveMinimum": 0},
+                      "low": {"type": "number", "exclusiveMinimum": 0},
+                      "close": {"type": "number", "exclusiveMinimum": 0},
+                      "volume": {"type": "integer", "minimum": 0}
+                    }
+                  }
+                },
+                "label_audit_ohlcv_adjusted_daily": {
+                  "type": "array",
+                  "description": "从 first_tradable_session 开始的未来复权日频 OHLCV，不可作为当前样本的模型输入。",
+                  "minItems": 20,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["date", "open", "high", "low", "close", "volume"],
+                    "properties": {
+                      "date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+                      "open": {"type": "number", "exclusiveMinimum": 0},
+                      "high": {"type": "number", "exclusiveMinimum": 0},
+                      "low": {"type": "number", "exclusiveMinimum": 0},
+                      "close": {"type": "number", "exclusiveMinimum": 0},
+                      "volume": {"type": "integer", "minimum": 0}
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "intraday_volume_panel": {
+      "type": "object",
+      "description": "事件当日对应股票的完整客观分时行情面板。",
+      "additionalProperties": false,
+      "required": ["provider", "timezone", "event_date", "interval", "session_scope", "symbols"],
+      "properties": {
+        "provider": {"type": "string", "minLength": 1},
+        "timezone": {"type": "string", "minLength": 1},
+        "event_date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+        "interval": {"const": "1m"},
+        "session_scope": {"type": "string", "minLength": 1},
+        "symbols": {
+          "type": "object",
+          "minProperties": 1,
+          "patternProperties": {
+            "^[A-Z][A-Z0-9.\\-]{0,9}$": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["session_start_et", "session_end_et", "bar_count",
+                           "is_complete_session", "bars"],
+              "properties": {
+                "session_start_et": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}$"
+                },
+                "session_end_et": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}$"
+                },
+                "bar_count": {"type": "integer", "minimum": 1},
+                "is_complete_session": {"const": true},
+                "bars": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["timestamp_et", "open", "high", "low", "close",
+                                 "volume", "vwap", "trade_count", "dollar_volume"],
+                    "properties": {
+                      "timestamp_et": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}$"
+                      },
+                      "open": {"type": "number", "exclusiveMinimum": 0},
+                      "high": {"type": "number", "exclusiveMinimum": 0},
+                      "low": {"type": "number", "exclusiveMinimum": 0},
+                      "close": {"type": "number", "exclusiveMinimum": 0},
+                      "volume": {"type": "integer", "minimum": 0},
+                      "vwap": {"type": "number", "exclusiveMinimum": 0},
+                      "trade_count": {"type": "integer", "minimum": 0},
+                      "dollar_volume": {"type": "number", "minimum": 0},
+                      "bid": {"type": "number", "exclusiveMinimum": 0},
+                      "ask": {"type": "number", "exclusiveMinimum": 0},
+                      "mid": {"type": "number", "exclusiveMinimum": 0},
+                      "spread_bps": {"type": "number", "minimum": 0},
+                      "nbbo_size": {"type": "integer", "minimum": 0},
+                      "auction_volume": {"type": "integer", "minimum": 0},
+                      "halt_flag": {"type": "boolean"}
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "associatin_search": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "News": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["title", "published_at"],
+            "properties": {
+              "title": {"type": "string"},
+              "summary": {"type": "string"},
+              "published_at": {"type": ["string", "null"]},
+              "url": {"type": ["string", "null"]}
+            }
+          }
+        },
+        "Flash": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["title", "published_at"],
+            "properties": {
+              "title": {"type": "string"},
+              "summary": {"type": "string"},
+              "published_at": {"type": ["string", "null"]},
+              "url": {"type": ["string", "null"]}
+            }
+          }
+        },
+        "Robot": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["title", "published_at"],
+            "properties": {
+              "title": {"type": "string"},
+              "summary": {"type": "string"},
+              "published_at": {"type": ["string", "null"]},
+              "url": {"type": ["string", "null"]}
+            }
+          }
+        },
+        "Post": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["title", "published_at"],
+            "properties": {
+              "title": {"type": "string"},
+              "summary": {"type": "string"},
+              "published_at": {"type": ["string", "null"]},
+              "url": {"type": ["string", "null"]}
+            }
+          }
+        },
+        "Article": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["title", "published_at"],
+            "properties": {
+              "title": {"type": "string"},
+              "summary": {"type": "string"},
+              "published_at": {"type": ["string", "null"]},
+              "url": {"type": ["string", "null"]}
+            }
+          }
+        },
+        "Report": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["title", "published_at"],
+            "properties": {
+              "title": {"type": "string"},
+              "summary": {"type": "string"},
+              "published_at": {"type": ["string", "null"]},
+              "url": {"type": ["string", "null"]}
+            }
+          }
+        },
+        "teleconference": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["title", "published_at"],
+            "properties": {
+              "title": {"type": "string"},
+              "summary": {"type": "string"},
+              "published_at": {"type": ["string", "null"]},
+              "url": {"type": ["string", "null"]}
+            }
+          }
+        },
+        "AI_search": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["provider", "query", "published_at"],
+            "properties": {
+              "provider": {"type": "string"},
+              "query": {"type": "string"},
+              "summary": {"type": "string"},
+              "published_at": {"type": ["string", "null"]},
+              "url": {"type": ["string", "null"]}
+            }
+          }
+        }
+      }
     }
   }
 }
